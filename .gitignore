@@ -1,0 +1,5 @@
+# Python pickled object files.
+*.p
+
+# MNIST dataset.
+*-ubyte
