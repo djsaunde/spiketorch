@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 
 from struct import unpack
 from torchvision import datasets
-from torch.utils.data import DataLoader
 
 data_path = os.path.join('..', 'data')
+
+np.set_printoptions(threshold=np.nan, linewidth=100)
 
 
 def get_labeled_data(filename, train=True):
@@ -86,6 +87,38 @@ def generate_spike_train(image, intensity, time):
 	# Make the spike data. Use a simple Poisson-like spike generator
 	# (just for illustrative purposes here. Better spike generators should
 	# be used in simulations).
+	spike_times = np.random.poisson(image.numpy(), [time, 784])
+	spike_times = np.cumsum(spike_times, axis=0)
+	spike_times[spike_times >= time] = 0
+
+	# Create spikes matrix from spike times.
+	spikes = np.zeros([time, 784])
+	for idx in range(700):
+		spikes[spike_times[idx, :], np.arange(784)] = 1
+
+	# Optionally plot the input conversion.
+	if plot_spike_trains:
+		fig, [ax1, ax2] = plt.subplots(1, 2)
+		ax1.imshow(image.numpy().reshape(28, 28)); ax1.set_title('Original MNIST digit')
+		ax2.imshow(spikes.T); ax2.set_title('Poisson spiking representation')
+		plt.show()
+
+	# Return the input spike occurrence matrix.
+	return torch.from_numpy(spikes)
+
+
+def generate_spike_train2(image, intensity, time):
+	'''
+	Generates Poisson spike trains based on image ink intensity.
+	'''
+	s = []
+	image = image / 4
+	
+	start = timeit.default_timer()
+
+	# Make the spike data. Use a simple Poisson-like spike generator
+	# (just for illustrative purposes here. Better spike generators should
+	# be used in simulations).
 	for i in range(image.size()[0]):
 		isi = np.random.poisson(image[i], image[i] * time)
 		s.append(np.cumsum(isi)[np.cumsum(isi) < time])
@@ -102,7 +135,6 @@ def generate_spike_train(image, intensity, time):
 	plt.show()
 
 	return torch.from_numpy(spikes)
-
 
 class SNN:
 	'''
@@ -208,6 +240,7 @@ if __name__ =='__main__':
 	parser.add_argument('--tc_pre', type=int, default=20)
 	parser.add_argument('--tc_post', type=int, default=20)
 	parser.add_argument('--gpu', type=str, default='False')
+	parser.add_argument('--plot_spike_trains', type=str, default='False')
 
 	# Place parsed arguments in local scope.
 	args = parser.parse_args()
@@ -221,7 +254,9 @@ if __name__ =='__main__':
 
 	print('\n')
 
+	# Convert string arguments into boolean datatype.
 	gpu = gpu == True
+	plot_spike_trains = plot_spike_trains == True
 
 	# Initialize the spiking neural network.
 	network = SNN(seed, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
