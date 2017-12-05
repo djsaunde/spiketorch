@@ -91,50 +91,20 @@ def generate_spike_train(image, intensity, time):
 	spike_times = np.cumsum(spike_times, axis=0)
 	spike_times[spike_times >= time] = 0
 
+	# Sparsify spike times into (time, n_input) matrix.
+	# spikes = np.zeros([time, 784])
+	# spikes[spike_times[spike_times > 0]] = 1
+
 	# Create spikes matrix from spike times.
 	spikes = np.zeros([time, 784])
 	for idx in range(700):
 		spikes[spike_times[idx, :], np.arange(784)] = 1
 
-	# Optionally plot the input conversion.
-	if plot_spike_trains:
-		fig, [ax1, ax2] = plt.subplots(1, 2)
-		ax1.imshow(image.numpy().reshape(28, 28)); ax1.set_title('Original MNIST digit')
-		ax2.imshow(spikes.T); ax2.set_title('Poisson spiking representation')
-		plt.show()
+	# print('It took %.4f seconds to generate one image\'s spike trains' % (timeit.default_timer() - start))
 
 	# Return the input spike occurrence matrix.
-	return torch.from_numpy(spikes)
+	return torch.from_numpy(spikes).float()
 
-
-def generate_spike_train2(image, intensity, time):
-	'''
-	Generates Poisson spike trains based on image ink intensity.
-	'''
-	s = []
-	image = image / 4
-	
-	start = timeit.default_timer()
-
-	# Make the spike data. Use a simple Poisson-like spike generator
-	# (just for illustrative purposes here. Better spike generators should
-	# be used in simulations).
-	for i in range(image.size()[0]):
-		isi = np.random.poisson(image[i], image[i] * time)
-		s.append(np.cumsum(isi)[np.cumsum(isi) < time])
-
-	spikes = np.zeros([784, time])
-	for i in range(784):
-		spikes[i, s[i]] = 1
-
-	print('It took %.4f seconds to generate one image\'s spike trains' % (timeit.default_timer() - start))
-
-	fig, [ax1, ax2] = plt.subplots(1, 2)
-	ax1.imshow(spikes)
-	ax2.imshow(image.numpy().reshape(28, 28))
-	plt.show()
-
-	return torch.from_numpy(spikes)
 
 class SNN:
 	'''
@@ -174,6 +144,9 @@ class SNN:
 							'test_time' : sim_times[2], 'test_rest' : sim_times[3] }
 		self.stdp_times = { 'tc_pre' : stdp_times[0], 'tc_post' : stdp_times[1] }
 
+		# Population names.
+		self.populations = ['Ae', 'Ai']
+
 		# Instantiate weight matrices.
 		# Full (random uniform(0.01, 0.3) to start) input to excitatory connectivity.
 		self.X_Ae = (torch.rand(784, n_neurons) + 0.01) * 0.3
@@ -184,26 +157,24 @@ class SNN:
 
 		# Simulation parameters.
 		# Rest (decay towards) voltages.
-		self.v_rest_e = -65.0
-		self.v_rest_i = -60.0
+		self.rest = { 'Ae' : -65.0, 'Ai' : -60.0 }
 		# Reset (after spike) voltages.
-		self.v_reset_e = -65.0
-		self.v_reset_i = -45.0
+		self.reset = { 'Ae' : -65.0, 'Ai' : -45.0 }
 		# Threshold voltages.
-		self.v_thresh_e = -52.0
-		self.v_thresh_i = -40.0
+		self.threshold = { 'Ae' : -52.0, 'Ai' : -40.0 }
 		# Neuron refractory periods in milliseconds.
-		self.refrac_e = 5
-		self.refrac_i = 2
+		self.refractory = { 'Ae' : 5, 'Ai' : 2 }
 		# Adaptive threshold time constant and step increase.
 		self.tc_theta = 1e7
 		self.theta_plus = 0.05
+		# Population-level decay constants.
+		self.decay = { 'Ae' : 100, 'Ai' : 10 }
 		# Etc.
 		self.intensity = 2.0
 
 		# Instantiate neuron state variables.
 		# Neuron voltages.
-		self.v = { 'Ae' : self.v_rest_e * torch.ones(n_neurons), 'Ai' : self.v_reset_i * torch.ones(n_neurons) }
+		self.v = { 'Ae' : self.rest['Ae'] * torch.ones(n_neurons), 'Ai' : self.rest['Ai'] * torch.ones(n_neurons) }
 		# Spike occurrences.
 		self.s = { 'X' : torch.zeros(784), 'Ae' : torch.zeros(n_neurons), 'Ai' : torch.zeros(n_neurons) }
 		# Synaptic traces (used for STDP calculations).
@@ -212,14 +183,49 @@ class SNN:
 		self.theta = torch.zeros(n_neurons)
 
 
-	def run(self, mode, input, time):
+	def run(self, mode, image, inpt, time):
 		'''
 		Runs the network on a single input for some time.
 		'''
-		# Generate Poisson spikes trains for this input
+		spikes = { population : torch.zeros([time, self.n_neurons]) for population in self.populations }
 
-		for i in range(time):
-			pass
+		# Run simulation for `time` simulation steps.
+		for timestep in range(time):
+			# Check for spiking neurons.
+			fired = { population : self.v[population] >= self.threshold[population] for population in self.populations }
+			for population in self.populations:
+				spikes[population][timestep, :] = fired[population]
+
+			# Update neuron voltages.
+			for population in self.populations:
+				# Integration of input.
+				if population == 'Ae':
+					self.v[population] = self.v[population] + inpt[timestep, :] @ self.X_Ae - spikes['Ai'][timestep, :] @ self.Ai_Ae
+				elif population == 'Ai':
+					self.v[population] = self.v[population] + spikes['Ae'][timestep, :] @ self.Ae_Ai
+
+				# Leakiness of integrators.
+				self.v[population] = self.v[population] - self.decay[population] * (self.v[population] - self.rest[population])
+
+				# Reset neurons above their threshold voltage.
+				self.v[population][self.v[population] > self.threshold[population]] = self.reset[population] 
+
+			# Perform STDP weight update.
+			self.X_Ae = self.X_Ae + self.lrs['nu_pre'] * inpt[timestep, :] @ (1 - self.X_Ae) @ self.a['Ae'] - \
+										self.lrs['nu_post'] * self.a['X'] @ self.X_Ae @ spikes['Ae'][timestep, :]
+
+		# Optionally plot the excitatory, inhibitory spiking.
+		if plot_spike_trains:
+			fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 12))
+			ax1.imshow(image.numpy().reshape(28, 28)); ax1.set_title('Original MNIST digit')
+			ax2.imshow(inpt.numpy().T); ax2.set_title('Poisson spiking representation')
+			ax3.imshow(spikes['Ae'].numpy().T); ax3.set_title('Excitatory spikes')
+			ax4.imshow(spikes['Ai'].numpy().T); ax4.set_title('Inhibitory spikes')
+			plt.tight_layout()
+			plt.show()
+
+		# Return excitatory population spikes.
+		return spikes['Ae']
 
 
 if __name__ =='__main__':
@@ -255,31 +261,37 @@ if __name__ =='__main__':
 	print('\n')
 
 	# Convert string arguments into boolean datatype.
-	gpu = gpu == True
-	plot_spike_trains = plot_spike_trains == True
+	gpu = gpu == 'True'
+	plot_spike_trains = plot_spike_trains == 'True'
 
 	# Initialize the spiking neural network.
 	network = SNN(seed, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
 				(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post))
 
+	# Get training, test data from disk.
 	train_data = get_labeled_data('train', train=True)
 	test_data = get_labeled_data('test', train=False)
 
+	# Convert data into torch Tensors.
 	train_X, train_y = torch.from_numpy(train_data['X'][:n_train]), torch.from_numpy(train_data['y'][:n_train])
 	test_X, test_y = torch.from_numpy(test_data['X'][:n_test]), torch.from_numpy(test_data['y'][:n_test])
 
-	# Inspect some training data.
-	# for image, target in zip(train_data['X'][:5], train_data['y'][:5]):
-	# 	plt.imshow(image.reshape(28, 28), cmap='binary', interpolation='nearest')
-	# 	plt.title('Digit label: %d' % target)
-	# 	plt.show()
+	# Special "zero data" used for network rest period between examples.
+	zero_image = torch.zeros(784).float()
+	zero_data = torch.zeros(700, 784).float()
 
 	# Run training phase.
 	correct = 0
-	for image, target in zip(train_X, train_y):
-		# Run image on network for `train_time` after transforming it into a vector of Poisson spike trains.
-		image = generate_spike_train(image, network.intensity, network.sim_times['train_time'])
-		output = network.run(mode='train', input=image, time=network.sim_times['train_time'])
+	start = timeit.default_timer()
+	for idx, (image, target) in enumerate(zip(train_X, train_y)):
+		# Print progress through training data.
+		if idx % 10 == 0:
+			print('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, len(train_X), timeit.default_timer() - start))
+			start = timeit.default_timer()
+
+		# Run image on network for `train_time` after transforming it into Poisson spike trains.
+		inpt = generate_spike_train(image, network.intensity, network.sim_times['train_time'])
+		output = network.run(mode='train', image=image, inpt=inpt, time=network.sim_times['train_time'])
 		# Classify network output based on historical spiking activity.
 		prediction = classify(output)
 		# If correct, increment counter variable.
@@ -287,6 +299,6 @@ if __name__ =='__main__':
 			correct += 1
 
 		# Run zero image on network for `rest_time`.
-		network.run(mode='train', input=torch.zeros(784), time=network.sim_times['train_rest'])
+		network.run(mode='train', image=zero_image, inpt=zero_data, time=network.sim_times['train_rest'])
 
 	print('Training accuracy:', correct / n_train)
