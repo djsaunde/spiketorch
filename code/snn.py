@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import timeit
 import argparse
@@ -113,7 +114,7 @@ class SNN:
 	(https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#).
 	'''
 	def __init__(self, seed=0, n_neurons=100, n_examples=(10000, 10000), dt=0.5, lrs=(1e-4, 1e-2), \
-								c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20)):
+						n_input=784, c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20)):
 		'''
 		Constructs the network based on chosen parameters.
 
@@ -135,7 +136,10 @@ class SNN:
 		np.random.seed(seed)
 		
 		# Set class attributes.
+		self.n_input = n_input
+		self.n_input_sqrt = int(np.sqrt(n_input))
 		self.n_neurons = n_neurons
+		self.n_neurons_sqrt = int(np.sqrt(n_neurons))
 		self.n_examples = n_examples
 		self.dt = dt
 		self.lrs = { 'nu_pre' : lrs[0], 'nu_post' : lrs[1] }
@@ -183,7 +187,7 @@ class SNN:
 		self.theta = torch.zeros(n_neurons)
 
 
-	def run(self, mode, image, inpt, time):
+	def run(self, mode, inpt, time):
 		'''
 		Runs the network on a single input for some time.
 		'''
@@ -214,24 +218,32 @@ class SNN:
 			self.X_Ae = self.X_Ae + self.lrs['nu_pre'] * inpt[timestep, :] @ (1 - self.X_Ae) @ self.a['Ae'] - \
 										self.lrs['nu_post'] * self.a['X'] @ self.X_Ae @ spikes['Ae'][timestep, :]
 
-		# Optionally plot the excitatory, inhibitory spiking.
-		if plot_spike_trains:
-			fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 12))
-			ax1.imshow(image.numpy().reshape(28, 28)); ax1.set_title('Original MNIST digit')
-			ax2.imshow(inpt.numpy().T); ax2.set_title('Poisson spiking representation')
-			ax3.imshow(spikes['Ae'].numpy().T); ax3.set_title('Excitatory spikes')
-			ax4.imshow(spikes['Ai'].numpy().T); ax4.set_title('Inhibitory spikes')
-			plt.tight_layout()
-			plt.show()
+		# Return excitatory and inhibitory spikes.
+		return spikes
 
-		# Return excitatory population spikes.
-		return spikes['Ae']
+	def get_square_weights(self):
+		'''
+		Get the weights from the input to excitatory layer and reshape them.
+		'''
+		square_weights = np.zeros([self.n_input_sqrt * self.n_neurons_sqrt, \
+									self.n_input_sqrt * self.n_neurons_sqrt])
+		weights = self.X_Ae.numpy()
 
+		for n in range(n_neurons):
+			filtr = weights[:, n]
+			square_weights[(n % self.n_neurons_sqrt) * self.n_input_sqrt : \
+						((n % self.n_neurons_sqrt) + 1) * self.n_input_sqrt, \
+						((n // self.n_neurons_sqrt) * self.n_input_sqrt) : \
+						((n // self.n_neurons_sqrt) + 1) * self.n_input_sqrt] = \
+							filtr.reshape([self.n_input_sqrt, self.n_input_sqrt])
+		
+		return square_weights.T
 
 if __name__ =='__main__':
 	parser = argparse.ArgumentParser(description='LIF simulation toy model implemented with PyTorch.')
 	parser.add_argument('--seed', type=int, default=0)
 	parser.add_argument('--mode', type=str, default='train')
+	parser.add_argument('--n_input', type=int, default=784)
 	parser.add_argument('--n_neurons', type=int, default=100)
 	parser.add_argument('--n_train', type=int, default=10000)
 	parser.add_argument('--n_test', type=int, default=10000)
@@ -246,7 +258,7 @@ if __name__ =='__main__':
 	parser.add_argument('--tc_pre', type=int, default=20)
 	parser.add_argument('--tc_post', type=int, default=20)
 	parser.add_argument('--gpu', type=str, default='False')
-	parser.add_argument('--plot_spike_trains', type=str, default='False')
+	parser.add_argument('--plot', type=str, default='False')
 
 	# Place parsed arguments in local scope.
 	args = parser.parse_args()
@@ -262,11 +274,11 @@ if __name__ =='__main__':
 
 	# Convert string arguments into boolean datatype.
 	gpu = gpu == 'True'
-	plot_spike_trains = plot_spike_trains == 'True'
+	plot = plot == 'True'
 
 	# Initialize the spiking neural network.
-	network = SNN(seed, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
-				(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post))
+	network = SNN(seed, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), n_input, c_inhib, \
+							(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post))
 
 	# Get training, test data from disk.
 	train_data = get_labeled_data('train', train=True)
@@ -277,10 +289,10 @@ if __name__ =='__main__':
 	test_X, test_y = torch.from_numpy(test_data['X'][:n_test]), torch.from_numpy(test_data['y'][:n_test])
 
 	# Special "zero data" used for network rest period between examples.
-	zero_image = torch.zeros(784).float()
-	zero_data = torch.zeros(700, 784).float()
+	zero_data = torch.zeros(700, n_input).float()
 
 	# Run training phase.
+	plt.ion()
 	correct = 0
 	start = timeit.default_timer()
 	for idx, (image, target) in enumerate(zip(train_X, train_y)):
@@ -291,14 +303,53 @@ if __name__ =='__main__':
 
 		# Run image on network for `train_time` after transforming it into Poisson spike trains.
 		inpt = generate_spike_train(image, network.intensity, network.sim_times['train_time'])
-		output = network.run(mode='train', image=image, inpt=inpt, time=network.sim_times['train_time'])
-		# Classify network output based on historical spiking activity.
-		prediction = classify(output)
+		spikes = network.run(mode='train', inpt=inpt, time=network.sim_times['train_time'])
+
+		# Optionally plot the excitatory, inhibitory spiking.
+		if plot:
+			if idx == 0:
+				# Create figure for input image and corresponding spike trains.
+				input_figure, [ax1, ax2] = plt.subplots(1, 2, figsize=(10, 6))
+				im1 = ax1.imshow(image.numpy().reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
+				ax1.set_title('Original MNIST digit (Iteration %d)' % idx)
+				im2 = ax2.imshow(inpt.numpy().T, cmap='binary')
+				ax2.set_title('Poisson spiking representation')
+
+				plt.tight_layout()
+
+				# Create figure for excitatory and inhibitiory neuron populations.
+				spike_figure, [ax3, ax4] = plt.subplots(2, figsize=(10, 5))
+				im3 = ax3.imshow(spikes['Ae'].numpy().T, cmap='binary')
+				ax3.set_title('Excitatory spikes')
+				im4 = ax4.imshow(spikes['Ai'].numpy().T, cmap='binary')
+				ax4.set_title('Inhibitory spikes')
+
+				plt.tight_layout()
+
+				# Create figure for input to excitatory weights.
+				weights_figure, ax5 = plt.subplots()
+				im5 = ax5.imshow(network.get_square_weights(), cmap='hot_r', vmin=0, vmax=1)
+				weights_figure.colorbar(im5, ax=ax5)
+			else:
+				# Reset image data after each iteration.
+				im1.set_data(image.numpy().reshape(network.n_input_sqrt, network.n_input_sqrt))
+				im2.set_data(inpt.numpy().T)
+				im3.set_data(spikes['Ae'].numpy().T)
+				im4.set_data(spikes['Ai'].numpy().T)
+				im5.set_data(network.get_square_weights())
+
+				# Update title of input digit plot to reflect current iteration.
+				ax1.set_title('Original MNIST digit (Iteration %d)' % idx)
+			
+			plt.pause(1e-8)
+
+		# Classify network output (spikes) based on historical spiking activity.
+		prediction = classify(spikes)
 		# If correct, increment counter variable.
 		if prediction == target.numpy()[0]:
 			correct += 1
 
 		# Run zero image on network for `rest_time`.
-		network.run(mode='train', image=zero_image, inpt=zero_data, time=network.sim_times['train_rest'])
+		network.run(mode='train', inpt=zero_data, time=network.sim_times['train_rest'])
 
 	print('Training accuracy:', correct / n_train)
