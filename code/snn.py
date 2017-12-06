@@ -100,7 +100,12 @@ def generate_spike_train(image, intensity, time):
 	for idx in range(time):
 		spikes[spike_times[idx, :], np.arange(n_input)] = 1
 
-	# print('It took %.4f seconds to generate one image\'s spike trains' % (timeit.default_timer() - start))
+	# Temporary fix: The above code forces a spike from
+	# every input neuron on the first time step.
+	spikes[0, :] = 0
+
+	# print('It took %.4f seconds to generate one image\'s \
+		# spike trains' % (timeit.default_timer() - start))
 
 	# Return the input spike occurrence matrix.
 	if gpu:
@@ -153,6 +158,7 @@ class SNN:
 
 		# Population names.
 		self.populations = ['Ae', 'Ai']
+		self.stdp_populations = ['X', 'Ae']
 
 		# Assignments and performance monitoring update interval.
 		self.update_interval = update_interval
@@ -162,7 +168,7 @@ class SNN:
 
 		# Instantiate weight matrices.+
 		self.W = { 'X_Ae' : (torch.rand(n_input, n_neurons) + 0.01) * 0.3, \
-					'Ae_Ai' : torch.diag(15.0 * torch.ones(n_neurons)), \
+					'Ae_Ai' : torch.diag(25.0 * torch.ones(n_neurons)), \
 					'Ai_Ae' : c_inhib * torch.ones([n_neurons, n_neurons]) \
 							- torch.diag(c_inhib * torch.ones(n_neurons)) }
 
@@ -200,69 +206,84 @@ class SNN:
 	def run(self, mode, inpt, time):
 		'''
 		Runs the network on a single input for some time.
+
+		Arguments:
+			- mode (str): Whether we are in test or training mode.
+					Affects whether to adaptive network parameters. 
+			- inpt (torch.Tensor / torch.cuda.Tensor): Network input, 
+					encoded as Poisson spike trains. Has shape (time, 
+					self.n_input).
+			- time (int): How many simulation time steps to run.
+
+		Returns:
+			State variables recorded over the simulation iteration.
 		'''
+		# Records network state variables for plotting purposes.
 		spikes = { pop : torch.zeros([time, self.n_neurons]).byte() for pop in self.populations }
-		voltages = { pop : torch.zeros([time, self.n_neurons]) for pop in self.populations }
-		traces = { 'X' : torch.zeros([time, self.n_input]), 'Ae' : torch.zeros([time, self.n_neurons]) }
+		if plot:
+			voltages = { pop : torch.zeros([time, self.n_neurons]) for pop in self.populations }
+			traces = { 'X' : torch.zeros([time, self.n_input]), 'Ae' : torch.zeros([time, self.n_neurons]) }
 
 		# Run simulation for `time` simulation steps.
 		for timestep in range(time):
+			# Record voltage history.
+			if plot:
+				voltages['Ae'][timestep, :] = self.v['Ae']
+				voltages['Ai'][timestep, :] = self.v['Ai']
+
 			# Check for spiking neurons.
-			fired = {}
-			for pop in self.populations:
-				if pop == 'Ae':
-					fired[pop] = self.v[pop] >= self.threshold[pop] + self.theta
-					self.theta[fired[pop]] += self.theta_plus
-				elif pop == 'Ai':
-					fired[pop] = self.v[pop] >= self.threshold[pop]
+			fired = { 'Ae' : self.v['Ae'] >= self.threshold['Ae'] + self.theta, 'Ai' : self.v['Ai'] >= self.threshold['Ai'] }
 
-				spikes[pop][timestep, :] = fired[pop]
+			# Update adaptive thresholds.
+			self.theta[fired['Ae']] += self.theta_plus
 
-			# Recoding synaptic traces.
-			for pop in ['X', 'Ae']:
-				if pop == 'X':
-					self.a[pop][inpt[timestep, :].byte()] = 1.0
-				elif pop == 'Ae':
-					self.a[pop][spikes[pop][timestep, :].byte()] = 1.0
+			# Record neuron spiking.
+			spikes['Ae'][timestep, :] = fired['Ae']
+			spikes['Ai'][timestep, :] = fired['Ai']
+
+			# Setting synaptic traces.
+			self.a['X'][inpt[timestep, :].byte()] = 1.0
+			self.a['Ae'][spikes['Ae'][timestep, :].byte()] = 1.0
 
 			# Reset neurons above their threshold voltage.
-			for pop in self.populations:
-				if pop == 'Ae':
-					self.v[pop][self.v[pop] > self.threshold[pop] + self.theta] = self.reset[pop]
-				elif pop == 'Ai':
-					self.v[pop][self.v[pop] > self.threshold[pop]] = self.reset[pop]
+			self.v['Ae'][fired['Ae']] = self.reset['Ae']
+			self.v['Ai'][fired['Ai']] = self.reset['Ai']
 
-			# Update neuron voltages.
-			for pop in self.populations:
-				# Integration of input.
-				if pop == 'Ae':
-					self.v[pop] += inpt[timestep, :].float() @ self.W['X_Ae'] - spikes['Ai'][timestep, :].float() @ self.W['Ai_Ae']
-				elif pop == 'Ai':
-					self.v[pop] += spikes['Ae'][timestep, :].float() @ self.W['Ae_Ai']
+			# Integrate input and decay voltages.
+			self.v['Ae'] += inpt[timestep, :].float() @ self.W['X_Ae'] - spikes['Ai'][timestep, :].float() @ self.W['Ai_Ae']
+			self.v['Ae'] -= self.v_decay['Ae'] * (self.v['Ae'] - self.rest['Ae'])
+			self.v['Ai'] += spikes['Ae'][timestep, :].float() @ self.W['Ae_Ai']
+			self.v['Ai'] -= self.v_decay['Ai'] * (self.v['Ai'] - self.rest['Ai'])
 
-				# Leakiness of integrators.
-				self.v[pop] -= self.v_decay[pop] * (self.v[pop] - self.rest[pop])
+			if mode == 'train':
+				# Perform STDP weight update.
+				self.W['X_Ae'] = self.W['X_Ae'] - self.lrs['nu_pre'] * (inpt[timestep, :].float().view(self.n_input, 1) \
+									* self.a['Ae'].view(1, self.n_neurons)) * (self.wmax - self.W['X_Ae']) + self.lrs['nu_post'] * \
+							self.W['X_Ae'] * (self.a['X'].view(self.n_input, 1) * spikes['Ae'][timestep, :].float().view(1, self.n_neurons))
 
-				# Record voltage history.
-				voltages[pop][timestep, :] = self.v[pop]
-
-			# Perform STDP weight update.
-			self.W['X_Ae'] = self.W['X_Ae'] - self.lrs['nu_pre'] * (inpt[timestep, :].float().view(self.n_input, 1) \
-								* self.a['Ae'].view(1, self.n_neurons)) * (self.wmax - self.W['X_Ae']) + self.lrs['nu_post'] * \
-						self.W['X_Ae'] * (self.a['X'].view(self.n_input, 1) * spikes['Ae'][timestep, :].float().view(1, self.n_neurons))
+				# Ensure that weights are within [0, self.wmax].
+				self.W['X_Ae'] = torch.clamp(self.W['X_Ae'], 0, self.wmax)
 
 			# Decay synaptic traces.
-			for pop in ['X', 'Ae']:
-				self.a[pop] -= self.a_decay[pop] * self.a[pop]
+			self.a['X'] -= self.a_decay['X'] * self.a['X']
+			self.a['Ae'] -= self.a_decay['Ae'] * self.a['Ae']
+			
+			# Record synaptic trace history.
+			if plot:
+				traces['X'][timestep, :] = self.a['X']
+				traces['Ae'][timestep, :] = self.a['Ae']
 
-				# Record synaptic trace history.
-				traces[pop][timestep, :] = self.a[pop]
+			# Decay adaptive thresholds.
+			self.theta -= self.theta_decay * self.theta
 
-		# Normalize weights after update.
+		# Normalize weights after one iteration.
 		self.normalize_weights()
 
-		# Return excitatory and inhibitory spikes.
-		return spikes, voltages, traces
+		# Return recorded state variables.
+		if plot:
+			return spikes, voltages, traces
+		else:
+			return spikes
 
 
 	def get_square_weights(self):
@@ -300,6 +321,9 @@ class SNN:
 		'''
 		Given the excitatory neuron firing history, assign them class labels.
 		'''
+		self.assignments = -1 * np.ones(self.n_neurons)
+		return
+
 		print(inputs.size())
 		print(outputs.size())
 
@@ -393,7 +417,10 @@ if __name__ =='__main__':
 
 		# Run image on network for `train_time` after transforming it into Poisson spike trains.
 		inpt = generate_spike_train(image, network.intensity, network.sim_times['train_time'])
-		spikes, voltages, traces = network.run(mode='train', inpt=inpt, time=network.sim_times['train_time'])
+		if plot:
+			spikes, voltages, traces = network.run(mode='train', inpt=inpt, time=network.sim_times['train_time'])
+		else:
+			spikes = network.run(mode='train', inpt=inpt, time=network.sim_times['train_time'])
 
 		# Classify network output (spikes) based on historical spiking activity.
 		prediction = classify(spikes)
@@ -402,7 +429,10 @@ if __name__ =='__main__':
 			correct += 1
 
 		# Run zero image on network for `rest_time`.
-		rest_spikes, rest_voltages, rest_traces = network.run(mode='train', inpt=zero_data, time=network.sim_times['train_rest'])
+		if plot:
+			rest_spikes, rest_voltages, rest_traces = network.run(mode='train', inpt=zero_data, time=network.sim_times['train_rest'])
+		else:
+			rest_spikes = network.run(mode='train', inpt=zero_data, time=network.sim_times['train_rest'])
 
 		# Concatenate image and rest network data for plotting purposes.
 		spikes = { pop : torch.cat([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
@@ -453,11 +483,11 @@ if __name__ =='__main__':
 				plt.tight_layout()
 
 				# Create figure to display neuron voltages over the iteration.
-				# voltages_figure, [ax6, ax7] = plt.subplots(2, figsize=(10, 5))
-				# ax6.plot(voltages['Ae'].cpu().numpy())
-				# ax7.plot(voltages['Ai'].cpu().numpy())
+				voltages_figure, [ax6, ax7] = plt.subplots(2, figsize=(10, 5))
+				ax6.plot(voltages['Ae'].cpu().numpy())
+				ax7.plot(voltages['Ai'].cpu().numpy())
 
-				# plt.tight_layout()
+				plt.tight_layout()
 
 				# # Create for displaying synaptic traces over the iteration.
 				# voltages_figure, [ax8, ax9] = plt.subplots(2, figsize=(10, 5))
@@ -471,9 +501,9 @@ if __name__ =='__main__':
 				im4.set_data(spikes['Ai'].cpu().numpy().T)
 				im5.set_data(network.get_square_weights())
 				
-				# ax6.clear(); ax7.clear(); # ax8.clear(); ax9.clear()
-				# ax6.plot(voltages['Ae'].cpu().numpy())
-				# ax7.plot(voltages['Ai'].cpu().numpy())
+				ax6.clear(); ax7.clear(); # ax8.clear(); ax9.clear()
+				ax6.plot(voltages['Ae'].cpu().numpy())
+				ax7.plot(voltages['Ai'].cpu().numpy())
 				# ax8.plot(traces['X'].cpu().numpy())
 				# ax9.plot(traces['Ae'].cpu().numpy())
 
