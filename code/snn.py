@@ -15,6 +15,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 data_path = os.path.join('..', 'data')
 
 np.set_printoptions(threshold=np.nan, linewidth=100)
+torch.set_printoptions(threshold=np.nan, linewidth=100, edgeitems=10)
 
 
 def get_labeled_data(filename, train=True):
@@ -168,7 +169,7 @@ class SNN:
 
 		# Instantiate weight matrices.+
 		self.W = { 'X_Ae' : (torch.rand(n_input, n_neurons) + 0.01) * 0.3, \
-					'Ae_Ai' : torch.diag(25.0 * torch.ones(n_neurons)), \
+					'Ae_Ai' : torch.diag(22.5 * torch.ones(n_neurons)), \
 					'Ai_Ae' : c_inhib * torch.ones([n_neurons, n_neurons]) \
 							- torch.diag(c_inhib * torch.ones(n_neurons)) }
 
@@ -201,6 +202,8 @@ class SNN:
 		self.a = { 'X' : torch.zeros(n_input), 'Ae' : torch.zeros(n_neurons) }
 		# Adaptive additive threshold parameters (used in excitatory layer).
 		self.theta = torch.zeros(n_neurons)
+		# Refractory period counters.
+		self.refrac_count = { 'Ae' : torch.zeros(n_neurons), 'Ai' : torch.zeros(n_neurons) }
 
 
 	def run(self, mode, inpt, time):
@@ -231,8 +234,18 @@ class SNN:
 				voltages['Ae'][timestep, :] = self.v['Ae']
 				voltages['Ai'][timestep, :] = self.v['Ai']
 
+			# Decrement refractory counters.
+			self.refrac_count['Ae'][self.refrac_count['Ae'] != 0] -= 1
+			self.refrac_count['Ai'][self.refrac_count['Ai'] != 0] -= 1
+
 			# Check for spiking neurons.
-			fired = { 'Ae' : self.v['Ae'] >= self.threshold['Ae'] + self.theta, 'Ai' : self.v['Ai'] >= self.threshold['Ai'] }
+			fired = {}
+			fired['Ae'] = (self.v['Ae'] >= self.threshold['Ae'] + self.theta) * (self.refrac_count['Ae'] == 0)
+			fired['Ai'] = (self.v['Ai'] >= self.threshold['Ai']) * (self.refrac_count['Ai'] == 0)
+
+			# Reset refractory periods for spiked neurons.
+			self.refrac_count['Ae'][fired['Ae']] = self.refractory['Ae']
+			self.refrac_count['Ai'][fired['Ai']] = self.refractory['Ai']
 
 			# Update adaptive thresholds.
 			self.theta[fired['Ae']] += self.theta_plus
@@ -257,9 +270,12 @@ class SNN:
 
 			if mode == 'train':
 				# Perform STDP weight update.
-				self.W['X_Ae'] = self.W['X_Ae'] - self.lrs['nu_pre'] * (inpt[timestep, :].float().view(self.n_input, 1) \
-									* self.a['Ae'].view(1, self.n_neurons)) * (self.wmax - self.W['X_Ae']) + self.lrs['nu_post'] * \
-							self.W['X_Ae'] * (self.a['X'].view(self.n_input, 1) * spikes['Ae'][timestep, :].float().view(1, self.n_neurons))
+				# Post-synaptic.
+				self.W['X_Ae'] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input, 1) \
+								* spikes['Ae'][timestep, :].float().view(1, self.n_neurons))
+				# Pre-synaptic.
+				self.W['X_Ae'] -= self.lrs['nu_pre'] * (inpt[timestep, :].float().view(self.n_input, 1) * \
+																	self.a['Ae'].view(1, self.n_neurons))
 
 				# Ensure that weights are within [0, self.wmax].
 				self.W['X_Ae'] = torch.clamp(self.W['X_Ae'], 0, self.wmax)
@@ -321,19 +337,13 @@ class SNN:
 		'''
 		Given the excitatory neuron firing history, assign them class labels.
 		'''
-		self.assignments = -1 * np.ones(self.n_neurons)
-		return
-
-		print(inputs.size())
-		print(outputs.size())
-
 		rates = torch.zeros([self.n_neurons, 10])
 		for j in range(10):
-			n_inputs = torch.nonzero(inputs == j).size(0)
+			n_inputs = torch.nonzero(inputs == j).numel()
 			if n_inputs > 0:
-				rates[:, j] += torch.sum(outputs[inputs == j], axis=0) / n_inputs
+				rates[:, j] += torch.sum(outputs[torch.stack([(inputs == 0)] * self.n_neurons)], 0) / n_inputs
 
-		self.assignments = torch.argmax(rates, 1)[1]
+		self.assignments = torch.max(rates, 1)[1]
 
 
 if __name__ =='__main__':
@@ -436,8 +446,9 @@ if __name__ =='__main__':
 
 		# Concatenate image and rest network data for plotting purposes.
 		spikes = { pop : torch.cat([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
-		voltages = { pop : torch.cat([voltages[pop], rest_voltages[pop]]) for pop in network.populations }
-		traces = { pop : torch.cat([traces[pop], rest_traces[pop]]) for pop in ['X', 'Ae'] }
+		if plot:
+			voltages = { pop : torch.cat([voltages[pop], rest_voltages[pop]]) for pop in network.populations }
+			traces = { pop : torch.cat([traces[pop], rest_traces[pop]]) for pop in ['X', 'Ae'] }
 
 		# Add spikes from this iteration to the spike monitor
 		spike_monitor[idx % network.update_interval] = torch.sum(spikes['Ae'], 0)
@@ -483,16 +494,16 @@ if __name__ =='__main__':
 				plt.tight_layout()
 
 				# Create figure to display neuron voltages over the iteration.
-				voltages_figure, [ax6, ax7] = plt.subplots(2, figsize=(10, 5))
-				ax6.plot(voltages['Ae'].cpu().numpy())
-				ax7.plot(voltages['Ai'].cpu().numpy())
+				# voltages_figure, [ax7, ax8] = plt.subplots(2, figsize=(10, 5))
+				# ax7.plot(voltages['Ae'].cpu().numpy())
+				# ax8.plot(voltages['Ai'].cpu().numpy())
 
-				plt.tight_layout()
+				# plt.tight_layout()
 
 				# # Create for displaying synaptic traces over the iteration.
-				# voltages_figure, [ax8, ax9] = plt.subplots(2, figsize=(10, 5))
-				# ax8.plot(network.a['X'].cpu().numpy())
-				# ax9.plot(network.a['Ae'].cpu().numpy())
+				# voltages_figure, [ax9, ax10] = plt.subplots(2, figsize=(10, 5))
+				# ax9.plot(network.a['X'].cpu().numpy())
+				# ax10.plot(network.a['Ae'].cpu().numpy())
 			else:
 				# Reset image data after each iteration.
 				im1.set_data(image.cpu().numpy().reshape(network.n_input_sqrt, network.n_input_sqrt))
@@ -500,12 +511,13 @@ if __name__ =='__main__':
 				im3.set_data(spikes['Ae'].cpu().numpy().T)
 				im4.set_data(spikes['Ai'].cpu().numpy().T)
 				im5.set_data(network.get_square_weights())
+				im6.set_data(network.assignments.cpu().numpy().reshape([network.n_neurons_sqrt, network.n_neurons_sqrt]))
 				
-				ax6.clear(); ax7.clear(); # ax8.clear(); ax9.clear()
-				ax6.plot(voltages['Ae'].cpu().numpy())
-				ax7.plot(voltages['Ai'].cpu().numpy())
-				# ax8.plot(traces['X'].cpu().numpy())
-				# ax9.plot(traces['Ae'].cpu().numpy())
+				# ax7.clear(); ax8.clear(); # ax9.clear(); ax10.clear()
+				# ax7.plot(voltages['Ae'].cpu().numpy())
+				# ax8.plot(voltages['Ai'].cpu().numpy())
+				# ax9.plot(traces['X'].cpu().numpy())
+				# ax10.plot(traces['Ae'].cpu().numpy())
 
 				# Update title of input digit plot to reflect current iteration.
 				ax1.set_title('Original MNIST digit (Iteration %d)' % idx)
