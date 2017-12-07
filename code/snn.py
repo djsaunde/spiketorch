@@ -15,6 +15,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 data_path = os.path.join('..', 'data')
 
 np.set_printoptions(threshold=np.nan, linewidth=100)
+np.warnings.filterwarnings('ignore')
 torch.set_printoptions(threshold=np.nan, linewidth=100, edgeitems=10)
 
 
@@ -72,27 +73,22 @@ def get_labeled_data(filename, train=True):
 	return data
 
 
-def classify(spike_activity):
-	'''
-	Not yet defined.
-	'''
-	return torch.multinomial(torch.arange(0, 10), 1).byte()[0]
-
-
 def generate_spike_train(image, intensity, time):
 	'''
 	Generates Poisson spike trains based on image ink intensity.
 	'''
 	s = []
-	image = (image / 4)
 	n_input = image.size()[0]
 	
 	start = timeit.default_timer()
 
-	# Make the spike data. Use a simple Poisson-like spike generator
-	# (just for illustrative purposes here. Better spike generators should
-	# be used in simulations).
-	spike_times = np.random.poisson(image.cpu().numpy(), [time, n_input])
+	# Image data preprocessing (divide by 4, invert (for spike rates),
+	# multiply by 1000 (conversion from milliseconds to seconds).
+	image = (1 / (image.cpu().numpy() / 4)) * 1000
+	image[np.isinf(image)] = 0
+	
+	# Make the spike data.
+	spike_times = np.random.poisson(image, [time, n_input])
 	spike_times = np.cumsum(spike_times, axis=0)
 	spike_times[spike_times >= time] = 0
 
@@ -122,7 +118,7 @@ class SNN:
 	(https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#).
 	'''
 	def __init__(self, seed=0, n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), \
-						c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20), update_interval=100):
+				c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20), update_interval=100, wmax=1.0):
 		'''
 		Constructs the network based on chosen parameters.
 
@@ -184,13 +180,19 @@ class SNN:
 		self.refractory = { 'Ae' : 5, 'Ai' : 2 }
 		# Adaptive threshold time constant and step increase.
 		self.theta_decay = 1 / 1e7
-		self.theta_plus = 0.05
+		self.theta_plus = 0.1
 		# Population-level decay constants.
 		self.v_decay = { 'Ae' : 1 / 100, 'Ai' : 1 / 10 }
+		# Voting schemes.
+		self.voting_schemes = [ 'all' ]
+		# Network performances indexed by voting schemes.
+		self.performances = { scheme : [] for scheme in self.voting_schemes }
+		# Excitatory neuron average rates per category.
+		self.rates = torch.zeros([self.n_neurons, 10])
 		# Etc.
 		self.intensity = 2.0
-		self.wmax = 1
-		self.norm = 78.0 * self.wmax
+		self.wmax = wmax
+		self.norm = 78.0 * wmax
 
 		# Instantiate neuron state variables.
 		# Neuron voltages.
@@ -328,25 +330,45 @@ class SNN:
 		'''
 		Normalize weights on synpases from input to excitatory layer.
 		'''
-		for idx in range(self.n_neurons):
-			self.W['X_Ae'][:, idx] = self.W['X_Ae'][:, idx] * (self.norm / self.W['X_Ae'][:, idx].sum())
+		self.W['X_Ae'] *= self.norm / self.W['X_Ae'].sum(0).view(1, -1)
 
 
 	def assign_labels(self, inputs, outputs):
 		'''
 		Given the excitatory neuron firing history, assign them class labels.
 		'''
-		rates = torch.zeros([self.n_neurons, 10])
 		for j in range(10):
 			n_inputs = torch.nonzero(inputs == j).numel()
 			if n_inputs > 0:
-				rates[:, j] += torch.sum(outputs[torch.stack([(inputs == 0)] * self.n_neurons)], 0) / n_inputs
+				idxs = torch.nonzero((inputs == j).long().view(-1)).view(-1)
+				self.rates[:, j] += 0.9 * self.rates[:, j] + torch.sum(torch.index_select(outputs, 0, idxs), 0) / n_inputs
 
-		self.assignments = torch.max(rates, 1)[1]
+		self.assignments = torch.max(self.rates, 1)[1]
+
+
+	def classify(self, spikes):
+		'''
+		Given the neuron assignments and the network spiking
+		activity, make predictions about the data targets.
+		'''
+		predictions = {}
+		for scheme in self.voting_schemes:
+			rates = torch.zeros(10)
+
+			if scheme == 'all':
+				for idx in range(10):
+					n_assigns = torch.nonzero(self.assignments == idx).numel()
+					if n_assigns > 0:
+						rates[idx] = torch.sum(spikes.index_select(0, torch.nonzero(self.assignments == idx).view(-1))) / n_assigns
+
+			predictions[scheme] = torch.sort(rates, dim=0, descending=True)[1]
+
+		return predictions
+
 
 
 if __name__ =='__main__':
-	parser = argparse.ArgumentParser(description='LIF simulation toy model implemented with PyTorch.')
+	parser = argparse.ArgumentParser(description='ETH (with LIF neurons) SNN toy model simulation implemented with PyTorch.')
 	parser.add_argument('--seed', type=int, default=0)
 	parser.add_argument('--mode', type=str, default='train')
 	parser.add_argument('--n_input', type=int, default=784)
@@ -354,7 +376,7 @@ if __name__ =='__main__':
 	parser.add_argument('--n_train', type=int, default=10000)
 	parser.add_argument('--n_test', type=int, default=10000)
 	parser.add_argument('--update_interval', type=int, default=100)
-	parser.add_argument('--dt', type=float, default=0.5)
+	parser.add_argument('--dt', type=float, default=1)
 	parser.add_argument('--nu_pre', type=float, default=1e-4)
 	parser.add_argument('--nu_post', type=float, default=1e-2)
 	parser.add_argument('--c_inhib', type=float, default=17.4)
@@ -364,6 +386,7 @@ if __name__ =='__main__':
 	parser.add_argument('--test_rest', type=int, default=150)
 	parser.add_argument('--tc_pre', type=int, default=20)
 	parser.add_argument('--tc_post', type=int, default=20)
+	parser.add_argument('--wmax', type=float, default=1.0)
 	parser.add_argument('--gpu', type=str, default='True')
 	parser.add_argument('--plot', type=str, default='False')
 
@@ -388,7 +411,7 @@ if __name__ =='__main__':
 
 	# Initialize the spiking neural network.
 	network = SNN(seed, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
-				(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post), update_interval)
+		(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post), update_interval, wmax)
 
 	# Get training, test data from disk.
 	train_data = get_labeled_data('train', train=True)
@@ -410,14 +433,21 @@ if __name__ =='__main__':
 	# Count spikes from each neuron on each example (between update intervals).
 	spike_monitor = torch.zeros([network.update_interval, network.n_neurons])
 
+	# Keep track of correct classifications for performance monitoring.
+	correct = { scheme : 0 for scheme in network.voting_schemes }
+
 	# Run training phase.
 	plt.ion()
-	correct = 0
 	start = timeit.default_timer()
 	for idx, (image, target) in enumerate(zip(train_X, train_y)):
-		# Assign labels to neurons based on network spiking activity.
 		if idx > 0 and idx % network.update_interval == 0:
+			# Assign labels to neurons based on network spiking activity.
 			network.assign_labels(train_y[idx - network.update_interval : idx], spike_monitor)
+			# Assess performance of network on last `update_interval` examples.
+			for scheme in network.performances.keys():
+				network.performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
+				correct[scheme] = 0  # Reset number of correct examples.
+				print(scheme, ':', network.performances[scheme])
 
 		# Print progress through training data.
 		if idx % 10 == 0:
@@ -432,10 +462,11 @@ if __name__ =='__main__':
 			spikes = network.run(mode='train', inpt=inpt, time=network.sim_times['train_time'])
 
 		# Classify network output (spikes) based on historical spiking activity.
-		prediction = classify(spikes)
+		predictions = network.classify(spikes['Ae'])
 		# If correct, increment counter variable.
-		if prediction == target[0]:
-			correct += 1
+		for scheme in predictions.keys():
+			if predictions[scheme][0] == target[0]:
+				correct[scheme] += 1
 
 		# Run zero image on network for `rest_time`.
 		if plot:
@@ -456,9 +487,11 @@ if __name__ =='__main__':
 		if plot:
 			if idx == 0:
 				# Create figure for input image and corresponding spike trains.
-				input_figure, [ax1, ax2] = plt.subplots(1, 2, figsize=(10, 6))
-				im1 = ax1.imshow(image.cpu().numpy().reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
-				ax1.set_title('Original MNIST digit (Iteration %d)' % idx)
+				input_figure, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(12, 6))
+				im0 = ax0.imshow(image.cpu().numpy().reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
+				ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
+				im1 = ax1.imshow(torch.sum(inpt, 0).cpu().numpy().reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
+				ax1.set_title('Sum of spike trains')
 				im2 = ax2.imshow(inpt.cpu().numpy().T, cmap='binary')
 				ax2.set_title('Poisson spiking representation')
 
@@ -480,7 +513,7 @@ if __name__ =='__main__':
 				color = plt.get_cmap('RdBu', 11)
 				im6 = ax6.matshow(network.assignments.cpu().numpy().reshape([network.n_neurons_sqrt, \
 											network.n_neurons_sqrt]), cmap=color, vmin=-1.5, vmax=9.5)
-				ax2.set_title('Neuron labels')
+				ax6.set_title('Neuron labels')
 
 				div5 = make_axes_locatable(ax5)
 				div6 = make_axes_locatable(ax6)
@@ -505,7 +538,8 @@ if __name__ =='__main__':
 				# ax10.plot(network.a['Ae'].cpu().numpy())
 			else:
 				# Reset image data after each iteration.
-				im1.set_data(image.cpu().numpy().reshape(network.n_input_sqrt, network.n_input_sqrt))
+				im0.set_data(image.cpu().numpy().reshape(network.n_input_sqrt, network.n_input_sqrt))
+				im1.set_data(torch.sum(inpt, 0).cpu().numpy().reshape(network.n_input_sqrt, network.n_input_sqrt))
 				im2.set_data(inpt.cpu().numpy().T)
 				im3.set_data(spikes['Ae'].cpu().numpy().T)
 				im4.set_data(spikes['Ai'].cpu().numpy().T)
@@ -519,7 +553,7 @@ if __name__ =='__main__':
 				# ax10.plot(traces['Ae'].cpu().numpy())
 
 				# Update title of input digit plot to reflect current iteration.
-				ax1.set_title('Original MNIST digit (Iteration %d)' % idx)
+				ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
 			
 			plt.pause(1e-8)
 
