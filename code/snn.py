@@ -121,7 +121,7 @@ class SNN:
 	recognition using spike-timing-dependent plasticity"
 	(https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#).
 	'''
-	def __init__(self, seed=0, n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=0.5, lrs=(1e-4, 1e-2), \
+	def __init__(self, seed=0, n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), \
 						c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20), update_interval=100):
 		'''
 		Constructs the network based on chosen parameters.
@@ -155,7 +155,7 @@ class SNN:
 		self.c_inhib = c_inhib
 		self.sim_times = { 'train_time' : sim_times[0], 'train_rest' : sim_times[1], \
 							'test_time' : sim_times[2], 'test_rest' : sim_times[3] }
-		self.stdp_times = { 'tc_pre' : stdp_times[0], 'tc_post' : stdp_times[1] }
+		self.stdp_times = { 'X' : dt / stdp_times[0], 'Ae' : dt / stdp_times[1] }
 
 		# Population names.
 		self.populations = ['Ae', 'Ai']
@@ -187,7 +187,6 @@ class SNN:
 		self.theta_plus = 0.05
 		# Population-level decay constants.
 		self.v_decay = { 'Ae' : 1 / 100, 'Ai' : 1 / 10 }
-		self.a_decay = { 'X' : 1 / 20, 'Ae' : 1 / 20 }
 		# Etc.
 		self.intensity = 2.0
 		self.wmax = 1
@@ -281,8 +280,8 @@ class SNN:
 				self.W['X_Ae'] = torch.clamp(self.W['X_Ae'], 0, self.wmax)
 
 			# Decay synaptic traces.
-			self.a['X'] -= self.a_decay['X'] * self.a['X']
-			self.a['Ae'] -= self.a_decay['Ae'] * self.a['Ae']
+			self.a['X'] -= self.stdp_times['X'] * self.a['X']
+			self.a['Ae'] -= self.stdp_times['Ae'] * self.a['Ae']
 			
 			# Record synaptic trace history.
 			if plot:
