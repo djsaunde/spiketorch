@@ -111,7 +111,7 @@ def generate_spike_train(image, intensity, time):
 		return torch.from_numpy(spikes).byte()
 
 
-class SNN:
+class ETH:
 	'''
 	Replication of the spiking neural network model from "Unsupervised learning of digit
 	recognition using spike-timing-dependent plasticity"
@@ -410,7 +410,7 @@ if __name__ =='__main__':
 		torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 	# Initialize the spiking neural network.
-	network = SNN(seed, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
+	network = ETH(seed, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
 		(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post), update_interval, wmax)
 
 	# Get training, test data from disk.
