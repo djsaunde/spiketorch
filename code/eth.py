@@ -14,7 +14,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 data_path = os.path.join('..', 'data')
 
-np.set_printoptions(threshold=np.nan, linewidth=100)
+np.set_printoptions(threshold=np.nan, linewidth=200)
 np.warnings.filterwarnings('ignore')
 torch.set_printoptions(threshold=np.nan, linewidth=100, edgeitems=10)
 
@@ -225,6 +225,9 @@ class ETH:
 
 		# Run simulation for `time` simulation steps.
 		for timestep in range(time):
+			# Get input spikes for this timestep.
+			self.s['X'] = inpt[timestep, :]
+
 			# Record voltage history.
 			if plot:
 				voltages['Ae'][timestep, :] = self.v['Ae']
@@ -235,58 +238,55 @@ class ETH:
 			self.refrac_count['Ai'][self.refrac_count['Ai'] != 0] -= 1
 
 			# Check for spiking neurons.
-			fired = {}
-			fired['Ae'] = (self.v['Ae'] >= self.threshold['Ae'] + self.theta) * (self.refrac_count['Ae'] == 0)
-			fired['Ai'] = (self.v['Ai'] >= self.threshold['Ai']) * (self.refrac_count['Ai'] == 0)
+			self.s['Ae'] = (self.v['Ae'] >= self.threshold['Ae'] + self.theta) * (self.refrac_count['Ae'] == 0)
+			self.s['Ai'] = (self.v['Ai'] >= self.threshold['Ai']) * (self.refrac_count['Ai'] == 0)
 
 			# Reset refractory periods for spiked neurons.
-			self.refrac_count['Ae'][fired['Ae']] = self.refractory['Ae']
-			self.refrac_count['Ai'][fired['Ai']] = self.refractory['Ai']
+			self.refrac_count['Ae'][self.s['Ae']] = self.refractory['Ae']
+			self.refrac_count['Ai'][self.s['Ai']] = self.refractory['Ai']
 
 			# Update adaptive thresholds.
-			self.theta[fired['Ae']] += self.theta_plus
+			self.theta[self.s['Ae']] += self.theta_plus
 
 			# Record neuron spiking.
-			spikes['Ae'][timestep, :] = fired['Ae']
-			spikes['Ai'][timestep, :] = fired['Ai']
+			spikes['Ae'][timestep, :] = self.s['Ae']
+			spikes['Ai'][timestep, :] = self.s['Ai']
 
 			# Setting synaptic traces.
-			self.a['X'][inpt[timestep, :].byte()] = 1.0
-			self.a['Ae'][spikes['Ae'][timestep, :].byte()] = 1.0
+			self.a['X'][self.s['X'].byte()] = 1.0
+			self.a['Ae'][self.s['Ae'].byte()] = 1.0
 
 			# Reset neurons above their threshold voltage.
-			self.v['Ae'][fired['Ae']] = self.reset['Ae']
-			self.v['Ai'][fired['Ai']] = self.reset['Ai']
+			self.v['Ae'][self.s['Ae']] = self.reset['Ae']
+			self.v['Ai'][self.s['Ai']] = self.reset['Ai']
 
 			# Integrate input and decay voltages.
-			self.v['Ae'] += inpt[timestep, :].float() @ self.W['X_Ae'] - spikes['Ai'][timestep, :].float() @ self.W['Ai_Ae']
+			self.v['Ae'] += self.s['X'].float() @ self.W['X_Ae'] - self.s['Ai'].float() @ self.W['Ai_Ae']
 			self.v['Ae'] -= self.v_decay['Ae'] * (self.v['Ae'] - self.rest['Ae'])
-			self.v['Ai'] += spikes['Ae'][timestep, :].float() @ self.W['Ae_Ai']
+			self.v['Ai'] += self.s['Ae'].float() @ self.W['Ae_Ai']
 			self.v['Ai'] -= self.v_decay['Ai'] * (self.v['Ai'] - self.rest['Ai'])
 
 			if mode == 'train':
 				# Perform STDP weight update.
 				# Post-synaptic.
-				self.W['X_Ae'] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input, 1) \
-								* spikes['Ae'][timestep, :].float().view(1, self.n_neurons))
+				self.W['X_Ae'] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input, 1) * self.s['Ae'].float().view(1, self.n_neurons))
 				# Pre-synaptic.
-				self.W['X_Ae'] -= self.lrs['nu_pre'] * (inpt[timestep, :].float().view(self.n_input, 1) * \
-																	self.a['Ae'].view(1, self.n_neurons))
+				self.W['X_Ae'] -= self.lrs['nu_pre'] * (self.s['X'].float().view(self.n_input, 1) * self.a['Ae'].view(1, self.n_neurons))
 
 				# Ensure that weights are within [0, self.wmax].
 				self.W['X_Ae'] = torch.clamp(self.W['X_Ae'], 0, self.wmax)
 
-			# Decay synaptic traces.
-			self.a['X'] -= self.stdp_times['X'] * self.a['X']
-			self.a['Ae'] -= self.stdp_times['Ae'] * self.a['Ae']
+				# Decay synaptic traces.
+				self.a['X'] -= self.stdp_times['X'] * self.a['X']
+				self.a['Ae'] -= self.stdp_times['Ae'] * self.a['Ae']
 			
-			# Record synaptic trace history.
-			if plot:
-				traces['X'][timestep, :] = self.a['X']
-				traces['Ae'][timestep, :] = self.a['Ae']
+				# Record synaptic trace history.
+				if plot:
+					traces['X'][timestep, :] = self.a['X']
+					traces['Ae'][timestep, :] = self.a['Ae']
 
-			# Decay adaptive thresholds.
-			self.theta -= self.theta_decay * self.theta
+				# Decay adaptive thresholds.
+				self.theta -= self.theta_decay * self.theta
 
 		# Normalize weights after one iteration.
 		self.normalize_weights()
@@ -332,12 +332,20 @@ class ETH:
 		'''
 		Given the excitatory neuron firing history, assign them class labels.
 		'''
+		# Loop over all target categories.
 		for j in range(10):
+			# Count the number of inputs having this target.
 			n_inputs = torch.nonzero(inputs == j).numel()
 			if n_inputs > 0:
+				# Get indices of inputs with this category.
 				idxs = torch.nonzero((inputs == j).long().view(-1)).view(-1)
-				self.rates[:, j] += 0.9 * self.rates[:, j] + torch.sum(torch.index_select(outputs, 0, idxs), 0) / n_inputs
+				# Calculate average firing rate per neuron, per category.
+				self.rates[:, j] = 0.9 * self.rates[:, j] + torch.sum(outputs[idxs], 0) / n_inputs
 
+		# Normalize rates to sum to 1 (over each neuron).
+		# self.rates = torch.div(self.rates, torch.sum(self.rates, 1).view(-1, 1) + 1e-8)
+
+		# Assignments of neurons are the categories for which they fire the most. 
 		self.assignments = torch.max(self.rates, 1)[1]
 
 
@@ -442,18 +450,23 @@ if __name__ =='__main__':
 		if idx > 0 and idx % network.update_interval == 0:
 			# Assign labels to neurons based on network spiking activity.
 			network.assign_labels(train_y[idx - network.update_interval : idx], spike_monitor)
+
+			print()
+
 			# Assess performance of network on last `update_interval` examples.
 			for scheme in network.performances.keys():
 				network.performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
 				correct[scheme] = 0  # Reset number of correct examples.
 				print(scheme, ':', network.performances[scheme])
 
+			print()
+
 		# Print progress through training data.
 		if idx % 10 == 0:
 			print('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, len(train_X), timeit.default_timer() - start))
 			start = timeit.default_timer()
 
-		# Run image on network for `train_time` after transforming it into Poisson spike trains.
+		# Run network on image for `train_time` after transforming it into Poisson spike trains.
 		inpt = generate_spike_train(image, network.intensity, network.sim_times['train_time'])
 		if plot:
 			spikes, voltages, traces = network.run(mode='train', inpt=inpt, time=network.sim_times['train_time'])
@@ -462,6 +475,7 @@ if __name__ =='__main__':
 
 		# Classify network output (spikes) based on historical spiking activity.
 		predictions = network.classify(spikes['Ae'])
+
 		# If correct, increment counter variable.
 		for scheme in predictions.keys():
 			if predictions[scheme][0] == target[0]:
@@ -474,8 +488,8 @@ if __name__ =='__main__':
 			rest_spikes = network.run(mode='train', inpt=zero_data, time=network.sim_times['train_rest'])
 
 		# Concatenate image and rest network data for plotting purposes.
-		spikes = { pop : torch.cat([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
 		if plot:
+			spikes = { pop : torch.cat([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
 			voltages = { pop : torch.cat([voltages[pop], rest_voltages[pop]]) for pop in network.populations }
 			traces = { pop : torch.cat([traces[pop], rest_traces[pop]]) for pop in ['X', 'Ae'] }
 
@@ -511,7 +525,7 @@ if __name__ =='__main__':
 				ax5.set_title('Input to excitatory weights')
 				color = plt.get_cmap('RdBu', 11)
 				im6 = ax6.matshow(network.assignments.cpu().numpy().reshape([network.n_neurons_sqrt, \
-											network.n_neurons_sqrt]), cmap=color, vmin=-1.5, vmax=9.5)
+											network.n_neurons_sqrt]).T, cmap=color, vmin=-1.5, vmax=9.5)
 				ax6.set_title('Neuron labels')
 
 				div5 = make_axes_locatable(ax5)
@@ -543,7 +557,7 @@ if __name__ =='__main__':
 				im3.set_data(spikes['Ae'].cpu().numpy().T)
 				im4.set_data(spikes['Ai'].cpu().numpy().T)
 				im5.set_data(network.get_square_weights())
-				im6.set_data(network.assignments.cpu().numpy().reshape([network.n_neurons_sqrt, network.n_neurons_sqrt]))
+				im6.set_data(network.assignments.cpu().numpy().reshape([network.n_neurons_sqrt, network.n_neurons_sqrt]).T)
 				
 				# ax7.clear(); ax8.clear(); # ax9.clear(); ax10.clear()
 				# ax7.plot(voltages['Ae'].cpu().numpy())
@@ -556,4 +570,5 @@ if __name__ =='__main__':
 			
 			plt.pause(1e-8)
 
-	print('Training accuracy:', correct / n_train)
+	for scheme in network.voting_schemes:
+		print('Training accuracy for voting scheme %s:' % scheme, correct[scheme] / n_train)
