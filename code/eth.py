@@ -135,11 +135,6 @@ class ETH:
 			- stdp_times: Tuple of (tc_pre, tc_post); gives STDP window times constants for pre-
 				and post-synaptic updates.
 		'''
-		# Set torch, torch-GPU, and numpy random number generator.
-		torch.manual_seed(seed)
-		torch.cuda.manual_seed_all(seed)
-		np.random.seed(seed)
-		
 		# Set class attributes.
 		self.n_input = n_input
 		self.n_input_sqrt = int(np.sqrt(n_input))
@@ -351,6 +346,8 @@ class ETH:
 		Given the neuron assignments and the network spiking
 		activity, make predictions about the data targets.
 		'''
+		spikes = torch.sum(spikes, 0)
+
 		predictions = {}
 		for scheme in self.voting_schemes:
 			rates = torch.zeros(10)
@@ -359,7 +356,8 @@ class ETH:
 				for idx in range(10):
 					n_assigns = torch.nonzero(self.assignments == idx).numel()
 					if n_assigns > 0:
-						rates[idx] = torch.sum(spikes.index_select(0, torch.nonzero(self.assignments == idx).view(-1))) / n_assigns
+						idxs = torch.nonzero(self.assignments == idx).view(-1)
+						rates[idx] = torch.sum(torch.index_select(spikes, 0, idxs)) / n_assigns
 
 			predictions[scheme] = torch.sort(rates, dim=0, descending=True)[1]
 
@@ -409,6 +407,13 @@ if __name__ =='__main__':
 	if gpu:
 		torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
+	# Set torch, torch-GPU, and numpy random number generator.
+	torch.manual_seed(seed)
+	np.random.seed(seed)
+
+	if gpu:
+		torch.cuda.manual_seed_all(seed)
+
 	# Initialize the spiking neural network.
 	network = ETH(seed, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
 		(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post), update_interval, wmax)
@@ -420,12 +425,6 @@ if __name__ =='__main__':
 	# Convert data into torch Tensors.
 	train_X, train_y = torch.from_numpy(train_data['X'][:n_train]), torch.from_numpy(train_data['y'][:n_train])
 	test_X, test_y = torch.from_numpy(test_data['X'][:n_test]), torch.from_numpy(test_data['y'][:n_test])
-
-	if gpu:
-		train_X = train_X.cuda()
-		train_y = train_y.cuda()
-		test_X = test_X.cuda()
-		test_y = test_y.cuda()
 
 	# Special "zero data" used for network rest period between examples.
 	zero_data = torch.zeros(train_rest, n_input).float()
