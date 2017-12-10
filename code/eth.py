@@ -101,9 +101,6 @@ def generate_spike_train(image, intensity, time):
 	# every input neuron on the first time step.
 	spikes[0, :] = 0
 
-	# print('It took %.4f seconds to generate one image\'s \
-		# spike trains' % (timeit.default_timer() - start))
-
 	# Return the input spike occurrence matrix.
 	if gpu:
 		return torch.from_numpy(spikes).byte().cuda()
@@ -342,9 +339,6 @@ class ETH:
 				# Calculate average firing rate per neuron, per category.
 				self.rates[:, j] = 0.9 * self.rates[:, j] + torch.sum(outputs[idxs], 0) / n_inputs
 
-		# Normalize rates to sum to 1 (over each neuron).
-		# self.rates = torch.div(self.rates, torch.sum(self.rates, 1).view(-1, 1) + 1e-8)
-
 		# Assignments of neurons are the categories for which they fire the most. 
 		self.assignments = torch.max(self.rates, 1)[1]
 
@@ -354,8 +348,6 @@ class ETH:
 		Given the neuron assignments and the network spiking
 		activity, make predictions about the data targets.
 		'''
-		spikes = torch.sum(spikes, 0)
-
 		predictions = {}
 		for scheme in self.voting_schemes:
 			rates = torch.zeros(10)
@@ -364,12 +356,28 @@ class ETH:
 				for idx in range(10):
 					n_assigns = torch.nonzero(self.assignments == idx).numel()
 					if n_assigns > 0:
-						idxs = torch.nonzero(self.assignments == idx).view(-1)
-						rates[idx] = torch.sum(torch.index_select(spikes, 0, idxs)) / n_assigns
+						rates[idx] = torch.sum(spikes[torch.nonzero((self.assignments == idx).long().view(-1)).view(-1)]) / n_assigns
 
 			predictions[scheme] = torch.sort(rates, dim=0, descending=True)[1]
 
 		return predictions
+
+		# spikes = torch.sum(spikes, 0)
+
+		# predictions = {}
+		# for scheme in self.voting_schemes:
+		# 	rates = torch.zeros(10)
+
+		# 	if scheme == 'all':
+		# 		for idx in range(10):
+		# 			n_assigns = torch.nonzero(self.assignments == idx).numel()
+		# 			if n_assigns > 0:
+		# 				idxs = torch.nonzero(self.assignments == idx).view(-1)
+		# 				rates[idx] = torch.sum(torch.index_select(spikes, 0, idxs)) / n_assigns
+
+		# 	predictions[scheme] = torch.sort(rates, dim=0, descending=True)[1]
+
+		# return predictions
 
 
 
@@ -433,6 +441,12 @@ if __name__ =='__main__':
 	# Convert data into torch Tensors.
 	train_X, train_y = torch.from_numpy(train_data['X'][:n_train]), torch.from_numpy(train_data['y'][:n_train])
 	test_X, test_y = torch.from_numpy(test_data['X'][:n_test]), torch.from_numpy(test_data['y'][:n_test])
+
+	if gpu:		
+		train_X = train_X.cuda()		
+		train_y = train_y.cuda()		
+		test_X = test_X.cuda()		
+		test_y = test_y.cuda()
 
 	# Special "zero data" used for network rest period between examples.
 	zero_data = torch.zeros(train_rest, n_input).float()
