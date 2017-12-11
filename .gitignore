@@ -3,3 +3,8 @@
 
 # MNIST dataset.
 *-ubyte
+
+# Parameters, assignments, and results.
+params/
+assignments/
+results/
