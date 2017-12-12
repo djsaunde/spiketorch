@@ -77,11 +77,11 @@ def generate_spike_train(image, intensity, time):
 	image = image * intensity
 
 	# Get number of input neurons.
-	n_input = image.size()[0]
+	n_input = image.shape[0]
 	
 	# Image data preprocessing (divide by 4, invert (for spike rates),
 	# multiply by 1000 (conversion from milliseconds to seconds).
-	image = (1 / (image.cpu().numpy() / 4)) * 1000
+	image = (1 / (image / 4)) * 1000
 	image[np.isinf(image)] = 0
 	
 	# Make the spike data.
@@ -99,7 +99,7 @@ def generate_spike_train(image, intensity, time):
 	spikes[0, :] = 0
 
 	# Return the input spike occurrence matrix.
-	return torch.from_numpy(spikes).byte()
+	return spikes
 
 
 def save_params(params, fname):
