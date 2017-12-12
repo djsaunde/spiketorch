@@ -1,0 +1,59 @@
+import os
+import numpy
+import argparse
+import matplotlib.pyplot as plt
+
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+params_path = os.path.join('..', 'params')
+
+from util import *
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--n_neurons', default=100, type=int)
+parser.add_argument('--n_train', default=10000, type=int)
+parser.add_argument('--seed', default=0, type=int)
+
+# Place parsed arguments in local scope.
+args = parser.parse_args()
+args = vars(args)
+locals().update(args)
+
+# Print out argument values.
+print('\nOptional argument values:')
+for key, value in args.items():
+	print('-', key, ':', value)
+
+print('\n')
+
+n_input_sqrt = 28
+n_neurons_sqrt = int(np.sqrt(n_neurons))
+
+# Generic filename for saving out weights and other parameters. 
+fname = '_'.join([ str(n_neurons), str(n_train), str(seed) ])
+
+# Get weight and theta parameters from disk.
+weights = load_params('.'.join(['_'.join(['X_Ae', fname]), 'npy']))
+theta = load_params('.'.join(['_'.join(['theta', fname]), 'npy']))
+
+# Get square weights and theta.
+weights = get_square_weights(weights, n_input_sqrt, n_neurons_sqrt)
+theta = theta.reshape([n_neurons_sqrt, n_neurons_sqrt])
+
+# Plot the weights and theta parameters.
+fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(16, 8))
+im1 = ax1.imshow(weights, cmap='hot_r', vmin=0, vmax=np.max(weights))
+im2 = ax2.imshow(theta, cmap='hot_r')
+div1 = make_axes_locatable(ax1)
+div2 = make_axes_locatable(ax2)
+cax1 = div1.append_axes("right", size="5%", pad=0.05)
+cax2 = div2.append_axes("right", size="5%", pad=0.05)
+
+plt.colorbar(im1, cax=cax1)
+plt.colorbar(im2, cax=cax2)
+
+ax1.set_title('Excitatory neuron filters')
+ax2.set_title('Excitatory neuron adaptive thresholds')
+
+plt.show()
