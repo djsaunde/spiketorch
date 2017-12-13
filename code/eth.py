@@ -6,6 +6,7 @@ import timeit
 import argparse
 import numpy as np
 import pickle as p
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from struct import unpack
@@ -281,6 +282,7 @@ class ETH:
 		activity, make predictions about the data targets.
 		'''
 		spikes = spikes.sum(0)
+
 		predictions = {}
 		for scheme in self.voting_schemes:
 			rates = torch.zeros(10)
@@ -360,6 +362,7 @@ if __name__ =='__main__':
 
 	# Keep track of correct classifications for performance monitoring.
 	correct = { scheme : 0 for scheme in network.voting_schemes }
+	total_correct = { scheme : 0 for scheme in network.voting_schemes }
 
 	if mode == 'train':
 		image_time = network.sim_times['train_time']
@@ -428,6 +431,7 @@ if __name__ =='__main__':
 		for scheme in predictions.keys():
 			if predictions[scheme][0] == target[0]:
 				correct[scheme] += 1
+				total_correct[scheme] += 1
 
 		# Run zero image on network for `rest_time`.
 		rest_spikes = network.run(mode=mode, inpt=zero_data, time=rest_time)
@@ -527,10 +531,10 @@ if __name__ =='__main__':
 	results = {}
 	for scheme in network.voting_schemes:
 		if mode == 'train':
-			results[scheme] = correct[scheme] / n_train
+			results[scheme] = total_correct[scheme] / n_train
 			print('Training accuracy for voting scheme %s:' % scheme, results[scheme])
 		elif mode == 'test':
-			results[scheme] = correct[scheme] / n_test
+			results[scheme] = total_correct[scheme] / n_test
 			print('Test accuracy for voting scheme %s:' % scheme, results[scheme])
 
 	# Save out network parameters and assignments for the test phase.
@@ -538,3 +542,12 @@ if __name__ =='__main__':
 		save_params(network.get_weights(), '.'.join(['_'.join(['X_Ae', network.fname]), 'npy']))
 		save_params(network.get_theta(), '.'.join(['_'.join(['theta', network.fname]), 'npy']))
 		save_assignments(network.get_assignments(), '.'.join(['_'.join(['assignments', network.fname]), 'npy']))
+
+	if mode == 'test':
+		results = pd.DataFrame([ [ network.fname ] + list(results.values()) ], columns=[ 'Parameters' ] + list(results.keys()))
+		if not 'results.csv' in os.listdir(results_path):
+			results.to_csv(os.path.join(results_path, 'results.csv'), index=False)
+		else:
+			all_results = pd.read_csv(os.path.join(results_path, 'results.csv'))
+			all_results = pd.concat([all_results, results], ignore_index=True)
+			all_results.to_csv(os.path.join(results_path, 'results.csv'), index=False)
