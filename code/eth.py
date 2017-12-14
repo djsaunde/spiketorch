@@ -166,6 +166,7 @@ class ETH:
 		spikes = { pop : torch.zeros([time, self.n_neurons]).byte() for pop in self.populations }
 
 		# Run simulation for `time` simulation steps.
+		start = timeit.default_timer()
 		for timestep in range(time):
 			# Get input spikes for this timestep.
 			self.s['X'] = inpt[timestep, :]
@@ -222,12 +223,26 @@ class ETH:
 
 		# Normalize weights after one iteration.
 		self.normalize_weights()
+		print(timeit.default_timer() - start, 'seconds for main simulation.')
 
 		# Return excitatory spiking activity.
 		if self.gpu:
 			return { pop : spikes[pop].cpu().numpy() for pop in self.populations }
 		else:
 			return { pop : spikes[pop].numpy() for pop in self.populations }
+
+	
+	def _reset(self):
+		'''
+		Reset relevant state variables after a single iteration.
+		'''
+		# Voltages.
+		self.v['Ae'][:] = self.rest['Ae']
+		self.v['Ai'][:] = self.rest['Ai']
+
+		# Synaptic traces.
+		self.a['X'][:] = 0
+		self.a['Ae'][:] = 0
 
 
 	def get_weights(self):
@@ -392,7 +407,12 @@ if __name__ =='__main__':
 	plt.ion()
 	best_accuracy = 0
 	start = timeit.default_timer()
+	iter_start = timeit.default_timer()
 	for idx, (image, target) in enumerate(zip(X, y)):
+		print(timeit.default_timer() - iter_start, 'seconds for one iteration.')
+		iter_start = timeit.default_timer()
+		print()
+
 		if mode == 'train':
 			if idx > 0 and idx % network.update_interval == 0:
 				# Assign labels to neurons based on network spiking activity.
@@ -448,11 +468,12 @@ if __name__ =='__main__':
 				total_correct[scheme] += 1
 
 		# Run zero image on network for `rest_time`.
-		rest_spikes = network.run(mode=mode, inpt=zero_data, time=rest_time)
+		# rest_spikes = network.run(mode=mode, inpt=zero_data, time=rest_time)
+		network._reset()
 
 		# Concatenate image and rest network data for plotting purposes.
-		if plot:
-			spikes = { pop : np.concatenate([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
+		# if plot:
+			# spikes = { pop : np.concatenate([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
 
 		# Add spikes from this iteration to the spike monitor
 		spike_monitor[idx % network.update_interval] = np.sum(spikes['Ae'], axis=0)
