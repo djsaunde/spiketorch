@@ -262,6 +262,15 @@ class ETH:
 		'''
 		Given the excitatory neuron firing history, assign them class labels.
 		'''
+		if self.gpu:
+			inputs = torch.from_numpy(inputs).cuda()
+			outputs = torch.from_numpy(outputs).cuda()
+		else:
+			inputs = torch.from_numpy(inputs)
+			outputs = torch.from_numpy(outputs)
+
+		outputs = outputs.float()
+
 		# Loop over all target categories.
 		for j in range(10):
 			# Count the number of inputs having this target.
@@ -281,6 +290,11 @@ class ETH:
 		Given the neuron assignments and the network spiking
 		activity, make predictions about the data targets.
 		'''
+		if self.gpu:
+			spikes = torch.from_numpy(spikes).cuda()
+		else:
+			spikes = torch.from_numpy(spikes)
+
 		spikes = spikes.sum(0)
 
 		predictions = {}
@@ -308,7 +322,7 @@ if __name__ =='__main__':
 	parser.add_argument('--n_neurons', type=int, default=100)
 	parser.add_argument('--n_train', type=int, default=10000)
 	parser.add_argument('--n_test', type=int, default=10000)
-	parser.add_argument('--update_interval', type=int, default=100)
+	parser.add_argument('--update_interval', type=int, default=250)
 	parser.add_argument('--dt', type=float, default=1)
 	parser.add_argument('--nu_pre', type=float, default=1e-4)
 	parser.add_argument('--nu_post', type=float, default=1e-2)
