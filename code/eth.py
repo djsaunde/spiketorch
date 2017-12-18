@@ -86,6 +86,7 @@ class ETH:
 		# Excitatory neuron assignments.
 		if mode == 'train':
 			self.assignments = -1 * torch.ones(n_neurons)
+			print(type(self.assignments))
 		elif mode == 'test':
 			self.assignments = torch.from_numpy(load_assignments('.'.join(['_'.join(['assignments', self.fname]), 'npy']))).cuda()
 
@@ -446,8 +447,9 @@ if __name__ =='__main__':
 		spikes = network.run(mode=mode, inpt=inpt, time=image_time)
 
 		# Re-run image if there isn't any network activity.
-		while np.count_nonzero(spikes['Ae']) < 5:
-			network.intensity += 1
+		n_retries = 0
+		while np.count_nonzero(spikes['Ae']) < 5 and n_retries < 3:
+			network.intensity += 1; n_retries += 1
 			inpt = generate_spike_train(image, network.intensity, image_time)
 			spikes = network.run(mode=mode, inpt=inpt, time=image_time)
 
@@ -464,12 +466,7 @@ if __name__ =='__main__':
 				total_correct[scheme] += 1
 
 		# Run zero image on network for `rest_time`.
-		# rest_spikes = network.run(mode=mode, inpt=zero_data, time=rest_time)
 		network._reset()
-
-		# Concatenate image and rest network data for plotting purposes.
-		# if plot:
-			# spikes = { pop : np.concatenate([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
 
 		# Add spikes from this iteration to the spike monitor
 		spike_monitor[idx % network.update_interval] = np.sum(spikes['Ae'], axis=0)
