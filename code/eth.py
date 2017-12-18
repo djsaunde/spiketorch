@@ -166,7 +166,6 @@ class ETH:
 		spikes = { pop : torch.zeros([time, self.n_neurons]).byte() for pop in self.populations }
 
 		# Run simulation for `time` simulation steps.
-		start = timeit.default_timer()
 		for timestep in range(time):
 			# Get input spikes for this timestep.
 			self.s['X'] = inpt[timestep, :]
@@ -223,7 +222,6 @@ class ETH:
 
 		# Normalize weights after one iteration.
 		self.normalize_weights()
-		print(timeit.default_timer() - start, 'seconds for main simulation.')
 
 		# Return excitatory spiking activity.
 		if self.gpu:
@@ -409,10 +407,6 @@ if __name__ =='__main__':
 	start = timeit.default_timer()
 	iter_start = timeit.default_timer()
 	for idx, (image, target) in enumerate(zip(X, y)):
-		print(timeit.default_timer() - iter_start, 'seconds for one iteration.')
-		iter_start = timeit.default_timer()
-		print()
-
 		if mode == 'train':
 			if idx > 0 and idx % network.update_interval == 0:
 				# Assign labels to neurons based on network spiking activity.
@@ -450,8 +444,9 @@ if __name__ =='__main__':
 		spikes = network.run(mode=mode, inpt=inpt, time=image_time)
 
 		# Re-run image if there isn't any network activity.
-		while np.count_nonzero(spikes['Ae']) < 5:
-			network.intensity += 1
+		n_retries = 0
+		while np.count_nonzero(spikes['Ae']) < 5 and n_retries < 3:
+			network.intensity += 1; n_retries += 1
 			inpt = generate_spike_train(image, network.intensity, image_time)
 			spikes = network.run(mode=mode, inpt=inpt, time=image_time)
 
@@ -468,12 +463,7 @@ if __name__ =='__main__':
 				total_correct[scheme] += 1
 
 		# Run zero image on network for `rest_time`.
-		# rest_spikes = network.run(mode=mode, inpt=zero_data, time=rest_time)
 		network._reset()
-
-		# Concatenate image and rest network data for plotting purposes.
-		# if plot:
-			# spikes = { pop : np.concatenate([spikes[pop], rest_spikes[pop]]) for pop in network.populations }
 
 		# Add spikes from this iteration to the spike monitor
 		spike_monitor[idx % network.update_interval] = np.sum(spikes['Ae'], axis=0)
@@ -580,7 +570,7 @@ if __name__ =='__main__':
 
 	if mode == 'test':
 		results = pd.DataFrame([ [ network.fname ] + list(results.values()) ], columns=[ 'Parameters' ] + list(results.keys()))
-		if not 'results.csv' in os.listdir(results_path):
+		if not str(network.n_neurons) + '_results.csv' in os.listdir(results_path):
 			results.to_csv(os.path.join(results_path, 'results.csv'), index=False)
 		else:
 			all_results = pd.read_csv(os.path.join(results_path, 'results.csv'))
