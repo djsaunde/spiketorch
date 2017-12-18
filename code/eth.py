@@ -86,6 +86,7 @@ class ETH:
 		# Excitatory neuron assignments.
 		if mode == 'train':
 			self.assignments = -1 * torch.ones(n_neurons)
+			print(type(self.assignments))
 		elif mode == 'test':
 			self.assignments = torch.from_numpy(load_assignments('.'.join(['_'.join(['assignments', self.fname]), 'npy']))).cuda()
 
