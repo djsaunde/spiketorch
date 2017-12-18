@@ -380,9 +380,9 @@ if __name__ =='__main__':
 
 	# Convert data into torch Tensors.
 	if mode == 'train':
-		X, y = data['X'][:n_train], data['y'][:n_train]
+		X, y = data['X'], data['y']
 	elif mode == 'test':
-		X, y = data['X'][:n_test], data['y'][:n_test]
+		X, y = data['X'], data['y']
 
 	# Count spikes from each neuron on each example (between update intervals).
 	spike_monitor = np.zeros([network.update_interval, network.n_neurons])
@@ -406,7 +406,9 @@ if __name__ =='__main__':
 	best_accuracy = 0
 	start = timeit.default_timer()
 	iter_start = timeit.default_timer()
-	for idx, (image, target) in enumerate(zip(X, y)):
+	for idx in range(n_train):
+		image, target = X[idx], y[idx]
+
 		if mode == 'train':
 			if idx > 0 and idx % network.update_interval == 0:
 				# Assign labels to neurons based on network spiking activity.
@@ -556,10 +558,10 @@ if __name__ =='__main__':
 	results = {}
 	for scheme in network.voting_schemes:
 		if mode == 'train':
-			results[scheme] = total_correct[scheme] / n_train
+			results[scheme] = 100 * total_correct[scheme] / n_train
 			print('Training accuracy for voting scheme %s:' % scheme, results[scheme])
 		elif mode == 'test':
-			results[scheme] = total_correct[scheme] / n_test
+			results[scheme] = 100 * total_correct[scheme] / n_test
 			print('Test accuracy for voting scheme %s:' % scheme, results[scheme])
 
 	# Save out network parameters and assignments for the test phase.
@@ -569,10 +571,13 @@ if __name__ =='__main__':
 		save_assignments(network.get_assignments(), '.'.join(['_'.join(['assignments', network.fname]), 'npy']))
 
 	if mode == 'test':
-		results = pd.DataFrame([ [ network.fname ] + list(results.values()) ], columns=[ 'Parameters' ] + list(results.keys()))
-		if not str(network.n_neurons) + '_results.csv' in os.listdir(results_path):
-			results.to_csv(os.path.join(results_path, 'results.csv'), index=False)
+		results = pd.DataFrame([ [ network.fname ] + list(results.values()) ], \
+									columns=[ 'Parameters' ] + list(results.keys()))
+
+		results_fname = '_'.join([str(network.n_neurons), 'results.csv'])
+		if not results_fname in os.listdir(results_path):
+			results.to_csv(os.path.join(results_path, results_fname), index=False)
 		else:
-			all_results = pd.read_csv(os.path.join(results_path, 'results.csv'))
+			all_results = pd.read_csv(os.path.join(results_path, results_fname))
 			all_results = pd.concat([all_results, results], ignore_index=True)
-			all_results.to_csv(os.path.join(results_path, 'results.csv'), index=False)
+			all_results.to_csv(os.path.join(results_path, results_fname), index=False)
