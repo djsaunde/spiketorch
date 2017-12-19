@@ -365,7 +365,7 @@ if __name__ =='__main__':
 	# Convert string arguments into boolean datatype.
 	plot = plot == 'True'
 
-	# Set torch, torch-GPU, and numpy random number generator.
+	# Set random number generator.
 	np.random.seed(seed)
 
 	# Initialize the spiking neural network.
@@ -413,7 +413,7 @@ if __name__ =='__main__':
 		n_samples = n_test
 
 	for idx in range(n_samples):
-		image, target = X[idx], y[idx]
+		image, target = X[idx % X.shape[0]], y[idx % X.shape[0]]
 
 		if mode == 'train':
 			if idx > 0 and idx % network.update_interval == 0:
@@ -580,7 +580,7 @@ if __name__ =='__main__':
 		results = pd.DataFrame([ [ network.fname ] + list(results.values()) ], \
 									columns=[ 'Parameters' ] + list(results.keys()))
 
-		results_fname = '_'.join([str(network.n_neurons), 'results.csv'])
+		results_fname = '_'.join([str(n_neurons), str(n_train), 'results.csv'])
 		if not results_fname in os.listdir(results_path):
 			results.to_csv(os.path.join(results_path, results_fname), index=False)
 		else:
