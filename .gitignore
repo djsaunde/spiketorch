@@ -8,3 +8,9 @@
 params/
 assignments/
 results/
+
+# PyCache (whatever that is!)
+code/__pycache__
+
+# Job reports (from HPC experiments)
+job_reports/
