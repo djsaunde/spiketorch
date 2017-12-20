@@ -412,13 +412,15 @@ if __name__ =='__main__':
 	elif mode == 'test':
 		n_samples = n_test
 
+	n_images = X.shape[0]
+
 	for idx in range(n_samples):
-		image, target = X[idx % X.shape[0]], y[idx % X.shape[0]]
+		image, target = X[idx % n_images], y[idx % n_images]
 
 		if mode == 'train':
 			if idx > 0 and idx % network.update_interval == 0:
 				# Assign labels to neurons based on network spiking activity.
-				network.assign_labels(y[idx - network.update_interval : idx], spike_monitor)
+				network.assign_labels(y[(idx - network.update_interval) % n_images : idx % n_images], spike_monitor)
 
 				# Assess performance of network on last `update_interval` examples.
 				print()
