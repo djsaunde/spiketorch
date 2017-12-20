@@ -406,7 +406,7 @@ if __name__ =='__main__':
 	best_accuracy = 0
 	start = timeit.default_timer()
 	iter_start = timeit.default_timer()
-
+	
 	if mode == 'train':
 		n_samples = n_train
 	elif mode == 'test':
