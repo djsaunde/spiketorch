@@ -420,7 +420,7 @@ if __name__ =='__main__':
 		if mode == 'train':
 			if idx > 0 and idx % network.update_interval == 0:
 				# Assign labels to neurons based on network spiking activity.
-				network.assign_labels(y[(idx - network.update_interval) % n_images : idx % n_images], spike_monitor)
+				network.assign_labels(y[(idx % n_images) - network.update_interval : idx % n_images], spike_monitor)
 
 				# Assess performance of network on last `update_interval` examples.
 				print()
