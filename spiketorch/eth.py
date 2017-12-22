@@ -13,12 +13,12 @@ from struct import unpack
 from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from util import *
+from .util import *
 
-data_path = os.path.join('..', 'data')
-params_path = os.path.join('..', 'params')
-assign_path = os.path.join('..', 'assignments')
-results_path = os.path.join('..', 'results')
+data_path = os.path.join('..', '..', 'data')
+params_path = os.path.join('..', '..', 'params')
+assign_path = os.path.join('..', '..', 'assignments')
+results_path = os.path.join('..', '..', 'results')
 
 for path in [ params_path, assign_path, results_path ]:
 	if not os.path.isdir(path):
@@ -35,7 +35,7 @@ class ETH:
 	recognition using spike-timing-dependent plasticity"
 	(https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#).
 	'''
-	def __init__(self, seed=0, n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), \
+	def __init__(self, mode='train', seed=0, n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), \
 				c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20), update_interval=100, wmax=1.0, gpu='True'):
 		'''
 		Constructs the network based on chosen parameters.
@@ -74,7 +74,7 @@ class ETH:
 			torch.cuda.manual_seed_all(seed)
 
 		# Generic filename for saving out weights and other parameters. 
-		self.fname = '_'.join([ str(n_neurons), str(n_train), str(seed) ])
+		self.fname = '_'.join([ str(n_neurons), str(n_examples[0]), str(seed) ])
 
 		# Population names.
 		self.populations = ['Ae', 'Ai']
@@ -189,10 +189,6 @@ class ETH:
 			spikes['Ae'][timestep, :] = self.s['Ae']
 			spikes['Ai'][timestep, :] = self.s['Ai']
 
-			# Setting synaptic traces.
-			self.a['X'][self.s['X'].byte()] = 1.0
-			self.a['Ae'][self.s['Ae'].byte()] = 1.0
-
 			# Reset neurons above their threshold voltage.
 			self.v['Ae'][self.s['Ae']] = self.reset['Ae']
 			self.v['Ai'][self.s['Ai']] = self.reset['Ai']
@@ -204,6 +200,10 @@ class ETH:
 			self.v['Ai'] -= self.v_decay['Ai'] * (self.v['Ai'] - self.rest['Ai'])
 
 			if mode == 'train':
+				# Setting synaptic traces.
+				self.a['X'][self.s['X'].byte()] = 1.0
+				self.a['Ae'][self.s['Ae'].byte()] = 1.0
+				
 				# Perform STDP weight update.
 				# Post-synaptic.
 				self.W['X_Ae'] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input, 1) * self.s['Ae'].float().view(1, self.n_neurons))
@@ -369,7 +369,7 @@ if __name__ =='__main__':
 	np.random.seed(seed)
 
 	# Initialize the spiking neural network.
-	network = ETH(seed, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
+	network = ETH(seed, mode, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
 		(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post), update_interval, wmax, gpu)
 
 	# Get training, test data from disk.
