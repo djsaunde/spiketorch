@@ -53,8 +53,8 @@ class LIFGroup(Group):
 	'''
 	Group of leaky integrate-and-fire neurons.
 	'''
-	def __init__(self, n, traces=False, rest=-0.65, reset=-0.65, threshold=-0.52, \
-							refractory=5, voltage_decay=1e-2, trace_tc=5e-2):
+	def __init__(self, n, traces=False, rest=-0.65, reset=-0.65, threshold=-0.52, 
+									refractory=5, voltage_decay=1e-2, trace_tc=5e-2):
 		
 		super().__init__()
 
@@ -102,12 +102,13 @@ class LIFGroup(Group):
 			self.x[self.s.byte()] = 1.0			
 
 
-class AdaptiveLIFGroup(LIFGroup):
+class AdaptiveLIFGroup(Group):
 	'''
 	Group of leaky integrate-and-fire neurons with adaptive thresholds.
 	'''
-	def __init__(self, n, traces=False, rest=-0.65, reset=-0.65, threshold=-0.52, \
-				refractory=5, voltage_decay=1e-2, theta_plus=0.1, theta_decay=1e-7):
+	def __init__(self, n, traces=False, rest=-0.65, reset=-0.65, threshold=-0.52, 
+					refractory=5, voltage_decay=1e-2, theta_plus=0.1, theta_decay=1e-7):
+		
 		super().__init__()
 
 		self.n = n  # No. of neurons.
