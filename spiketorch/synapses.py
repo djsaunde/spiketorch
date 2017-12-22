@@ -1,32 +1,32 @@
 import torch
 
 
-class ConstantSynapses:
+class Synapses:
 	'''
 	Specifies constant synapses between two populations of neurons.
 	'''
-	def __init__(self, source, target, w=None, wmax=1.0):
+	def __init__(self, source, target, w=None):
 		self.source = source
 		self.target = target
 
-		if w == None:
-			self.w = wmax * torch.rand(source.n, target.n)
+		if w is None:
+			self.w = torch.rand(source.n, target.n)
 		else:
-			self.w = torch.from_numpy(w)
+			self.w = w
 
 
 class STDPSynapses:
 	'''
 	Specifies STDP-adapted synapses between two populations of neurons.
 	'''
-	def __init__(self, source, target, weights=None, nu_pre=1e-4, nu_post=1e-2, wmax=1.0, norm=0.1):
+	def __init__(self, source, target, w=None, nu_pre=1e-4, nu_post=1e-2, wmax=1.0, norm=0.1):
 		self.source = source
 		self.target = target
 
-		if weights == None:
-			self.w = wmax * torch.rand(source.n, target.n)
+		if w is None:
+			self.w = torch.rand(source.n, target.n)
 		else:
-			self.w = torch.from_numpy(w)
+			self.w = w
 
 		self.nu_pre = nu_pre
 		self.nu_post = nu_post
@@ -37,7 +37,7 @@ class STDPSynapses:
 		'''
 		Normalize weights to have average value `self.norm`.
 		'''
-		self.w *= self.norm / self.w.sum(0).view(1, -1)
+		self.w *= self.norm * self.w.sum(0).view(1, -1)
 
 	def update(self):
 		'''
