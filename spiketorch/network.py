@@ -29,7 +29,13 @@ class Network:
 
 			inpts[key[1]][key[0]] = source.s.float() @ weights
 
-		return inpts	
+		return inpts
+
+	def get_weights(self, name):
+		return self.synapses[name].w
+
+	def get_theta(self, name):
+		return self.groups[name].theta
 
 	def run(self, mode, inpts, time):
 		'''

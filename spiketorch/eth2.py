@@ -56,6 +56,35 @@ def classify(spikes, voting_schemes, assignments):
 	return predictions
 
 
+def assign_labels(inputs, outputs, rates, assignments):
+	'''
+	Given the excitatory neuron firing history, assign them class labels.
+	'''
+	if gpu:
+		inputs = torch.from_numpy(inputs).cuda()
+		outputs = torch.from_numpy(outputs).cuda()
+	else:
+		inputs = torch.from_numpy(inputs)
+		outputs = torch.from_numpy(outputs)
+
+	outputs = outputs.float()
+
+	# Loop over all target categories.
+	for j in range(10):
+		# Count the number of inputs having this target.
+		n_inputs = torch.nonzero(inputs == j).numel()
+		if n_inputs > 0:
+			# Get indices of inputs with this category.
+			idxs = torch.nonzero((inputs == j).long().view(-1)).view(-1)
+			# Calculate average firing rate per neuron, per category.
+			rates[:, j] = 0.9 * rates[:, j] + torch.sum(outputs[idxs], 0) / n_inputs
+
+	# Assignments of neurons are the categories for which they fire the most. 
+	assignments = torch.max(self.rates, 1)[1]
+
+	return rates, assignments
+
+
 parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
 					SNN toy model simulation implemented with PyTorch.')
 
@@ -143,6 +172,7 @@ rest_time = rest
 # Voting schemes and neuron label assignments.
 voting_schemes = ['all']
 assignments = -1 * torch.ones(n_neurons)
+rates = torch.zeros(n_neurons, 10)
 performances = { scheme : [] for scheme in voting_schemes }
 
 # Keep track of correct classifications for performance monitoring.
@@ -168,6 +198,37 @@ n_images = X.shape[0]
 intensity = 1
 for idx in range(n_samples):
 	image, target = X[idx % n_images], y[idx % n_images]
+
+	if mode == 'train':
+		if idx > 0 and idx % update_interval == 0:
+			# Assign labels to neurons based on network spiking activity.
+			assign_labels(y[(idx % n_images) - update_interval : idx % n_images], spike_monitor, rates, assignments)
+
+			# Assess performance of network on last `update_interval` examples.
+			print()
+			for scheme in performances.keys():
+				performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
+				correct[scheme] = 0  # Reset number of correct examples.
+				print(scheme, ':', network.performances[scheme])
+
+				# Save best accuracy.
+				if performances[scheme][-1] > best_accuracy:
+					best_accuracy = performances[scheme][-1]
+
+					if gpu:
+						weights = network.get_weights(('X', 'Ae')).cpu().numpy()
+						theta = network.get_theta('Ae').cpu().numpy()
+						asgnmts = assignments.cpu().numpy()
+					else:
+						weights = network.get_weights(('X', 'Ae')).numpy()
+						theta = network.get_theta('Ae').numpy()
+						asgnmts = assignments.numpy()
+
+					save_params(weights, '.'.join(['_'.join(['X_Ae', fname]), 'npy']))
+					save_params(theta, '.'.join(['_'.join(['theta', fname]), 'npy']))
+					save_assignments(asgnmts, '.'.join(['_'.join(['assignments', fname]), 'npy']))
+
+			print()
 
 	# Print progress through dataset.
 	if idx % 10 == 0:
