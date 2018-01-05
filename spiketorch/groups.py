@@ -54,7 +54,7 @@ class LIFGroup(Group):
 	Group of leaky integrate-and-fire neurons.
 	'''
 	def __init__(self, n, traces=False, rest=-0.65, reset=-0.65, threshold=-0.52, 
-									refractory=5, voltage_decay=1e-2, trace_tc=5e-2):
+								refractory=5, voltage_decay=1e-2, trace_tc=5e-2):
 		
 		super().__init__()
 
@@ -79,7 +79,7 @@ class LIFGroup(Group):
 	def step(self, inpts, mode):
 		if mode == 'train':
 			# Decay spike traces.
-			self.x -= self.stdp_tc * self.x
+			self.x -= self.trace_tc * self.x
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
@@ -118,8 +118,8 @@ class AdaptiveLIFGroup(Group):
 	'''
 	Group of leaky integrate-and-fire neurons with adaptive thresholds.
 	'''
-	def __init__(self, n, traces=False, rest=-0.65, reset=-0.65, threshold=-0.52, 
-					refractory=5, voltage_decay=1e-2, theta_plus=0.1, theta_decay=1e-7):
+	def __init__(self, n, traces=False, rest=-0.65, reset=-0.65, threshold=-0.52, refractory=5,
+							voltage_decay=1e-2, theta_plus=0.1, theta_decay=1e-7, trace_tc=5e-2):
 		
 		super().__init__()
 
@@ -129,6 +129,9 @@ class AdaptiveLIFGroup(Group):
 		self.threshold = threshold  # Spike threshold voltage.
 		self.refractory = refractory  # Post-spike refractory period.
 		self.voltage_decay = voltage_decay  # Rate of decay of neuron voltage.
+		self.theta_plus = theta_plus  # Constant mV to raise threshold potential post-firing.
+		self.theta_decay = theta_decay  # Rate of decay of adaptive threshold potential.
+		self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
 		self.v = self.rest * torch.ones(n)  # Neuron voltages.
 		self.s = torch.zeros(n)  # Spike occurences.
@@ -140,11 +143,10 @@ class AdaptiveLIFGroup(Group):
 		if self.refractory > 0:
 			self.refrac_count = torch.zeros(n)  # Refractory period counters.
 
-
 	def step(self, inpts, mode):
 		if mode == 'train':
 			# Decay spike traces.
-			self.x -= self.stdp_tc * self.x
+			self.x -= self.trace_tc * self.x
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
@@ -159,8 +161,12 @@ class AdaptiveLIFGroup(Group):
 		# Reset neurons above their threshold voltage.
 		self.v[self.s] = self.reset
 
-		# Integrate input and decay voltages.
-		self.v += inpts - self.voltage_decay * (self.v - self.rest)
+		# Integrate inputs.
+		for key in inpts:
+			self.v += inpts[key]
+
+		# Decay voltages.
+		self.v -= self.voltage_decay * (self.v - self.rest)
 
 		# Update adaptive thresholds.
 		self.theta[self.s] += self.theta_plus

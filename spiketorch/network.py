@@ -23,41 +23,59 @@ class Network:
 
 			source = self.synapses[key].source
 			target = self.synapses[key].target
-			
-			if not target in inpts:
+
+			if not key[1] in inpts:
 				inpts[key[1]] = {}
 
 			inpts[key[1]][key[0]] = source.s.float() @ weights
 
 		return inpts	
 
-
 	def run(self, mode, inpts, time):
 		'''
 		Run network for a single iteration.
 		'''
+		# Record spikes from each population over the iteration.
+		spikes = {}
+		for key in self.groups:
+			spikes[key] = torch.zeros(time, self.groups[key].n)
+
 		# Get inputs to all neuron groups from their parent neuron groups.
 		inpts.update(self.get_inputs())
 		
+		# Simulate neuron and synapse activity for `time` timesteps.
 		for timestep in range(time):
+			# Update each group in turn.
 			for key in self.groups:
 				if type(self.groups[key]) == spiketorch.groups.InputGroup:
 					self.groups[key].step(inpts[key][timestep, :], mode)
-				else:
+
+				# Record spikes from this population at this timestep.
+				spikes[key][timestep, :] = self.groups[key].s
+			
+			for key in self.groups:
+				if type(self.groups[key]) != spiketorch.groups.InputGroup:
 					self.groups[key].step(inpts[key], mode)
 
+				# Record spikes from this population at this timestep.
+				spikes[key][timestep, :] = self.groups[key].s
+
+			# Update synapse weights if we're in training mode.
 			if mode == 'train':
 				for synapse in self.synapses:
-					if type(self.synapses[synapse]) == STDPSynapses:
-						self.synapses[synapses].update()
+					if type(self.synapses[synapse]) == spiketorch.synapses.STDPSynapses:
+						self.synapses[synapse].update()
 
 			# Get inputs to all neuron groups from their parent neuron groups.
 			inpts.update(self.get_inputs())
 
+		# Normalize synapse weights if we're in training mode.
 		if mode == 'train':
-			for synapses in self.synapses:
-				if type(self.synapses[synpase]) == STDPSynapses:
-					self.synapses[synapses].normalize()
+			for synapse in self.synapses:
+				if type(self.synapses[synapse]) == spiketorch.synapses.STDPSynapses:
+					self.synapses[synapse].normalize()
+
+		return spikes
 
 	def reset(self):
 		'''

@@ -19,7 +19,7 @@ class STDPSynapses:
 	'''
 	Specifies STDP-adapted synapses between two populations of neurons.
 	'''
-	def __init__(self, source, target, w=None, nu_pre=1e-4, nu_post=1e-2, wmax=1.0, norm=0.1):
+	def __init__(self, source, target, w=None, nu_pre=1e-4, nu_post=1e-2, wmax=1.0, norm=78.0):
 		self.source = source
 		self.target = target
 
@@ -37,16 +37,16 @@ class STDPSynapses:
 		'''
 		Normalize weights to have average value `self.norm`.
 		'''
-		self.w *= self.norm * self.w.sum(0).view(1, -1)
+		self.w *= self.norm / self.w.sum(0).view(1, -1)
 
 	def update(self):
 		'''
 		Perform STDP weight update.
 		'''
 		# Post-synaptic.
-		self.w += self.nu_post * (self.source.a.view(self.source.n, 1) * self.target.s.float().view(1, self.target.n))
+		self.w += self.nu_post * (self.source.x.view(self.source.n, 1) * self.target.s.float().view(1, self.target.n))
 		# Pre-synaptic.
-		self.w -= self.nu_pre * (self.source.s.float().view(self.source.n, 1) * self.target.a.view(1, self.target.n))
+		self.w -= self.nu_pre * (self.source.s.float().view(self.source.n, 1) * self.target.x.view(1, self.target.n))
 
 		# Ensure that weights are within [0, self.wmax].
 		self.w = torch.clamp(self.w, 0, self.wmax)
