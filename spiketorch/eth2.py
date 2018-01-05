@@ -13,10 +13,10 @@ from struct import unpack
 from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .util import *
-from .groups import *
-from .synapses import *
-from .network import *
+from spiketorch.util import *
+from spiketorch.groups import *
+from spiketorch.synapses import *
+from spiketorch.network import *
 
 data_path = os.path.join('..', '..', 'data')
 params_path = os.path.join('..', '..', 'params')
@@ -32,7 +32,9 @@ np.warnings.filterwarnings('ignore')
 torch.set_printoptions(threshold=np.nan, linewidth=100, edgeitems=10)
 
 
-parser = argparse.ArgumentParser(description='ETH (with LIF neurons) SNN toy model simulation implemented with PyTorch.')
+parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
+					SNN toy model simulation implemented with PyTorch.')
+
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--mode', type=str, default='train')
 parser.add_argument('--n_input', type=int, default=784)
@@ -44,10 +46,8 @@ parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--nu_pre', type=float, default=1e-4)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--c_inhib', type=float, default=17.4)
-parser.add_argument('--train_time', type=int, default=350)
-parser.add_argument('--train_rest', type=int, default=150)
-parser.add_argument('--test_time', type=int, default=350)
-parser.add_argument('--test_rest', type=int, default=150)
+parser.add_argument('--time', type=int, default=350)
+parser.add_argument('--rest', type=int, default=150)
 parser.add_argument('--tc_pre', type=int, default=20)
 parser.add_argument('--tc_post', type=int, default=20)
 parser.add_argument('--wmax', type=float, default=1.0)
@@ -72,15 +72,21 @@ plot = plot == 'True'
 # Set random number generator.
 np.random.seed(seed)
 
+# Record decaying spike traces to use STDP.
+if mode == 'train':
+	traces = True
+
 # Initialize the spiking neural network.
 network = Network()
-network.add_group(InputGroup(n_input), 'X')
-network.add_group(AdaptiveLIFGroup(n_neurons), 'Ae')
-network.add_group(AdaptiveLIFGroup(n_neurons), 'Ai')
-network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae']), name='X_Ae')
-network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], w=torch.diag(22.5 * torch.ones(n_neurons))), name='Ae_Ai')
-network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=c_inhib * torch.ones([n_neurons, \
-											n_neurons]) - torch.diag(c_inhib * torch.ones(n_neurons))), name='Ai_Ae')
+network.add_group(InputGroup(n_input, traces=traces), 'X')
+network.add_group(AdaptiveLIFGroup(n_neurons, traces=traces), 'Ae')
+network.add_group(AdaptiveLIFGroup(n_neurons, traces=traces), 'Ai')
+network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae']), name=('X', 'Ae'))
+network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
+					w=torch.diag(22.5 * torch.ones(n_neurons))), name=('Ae', 'Ai'))
+network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=c_inhib * \
+							torch.ones([n_neurons, n_neurons]) - torch.diag(c_inhib \
+											* torch.ones(n_neurons))), name=('Ai', 'Ae'))
 
 # Get training, test data from disk.
 if mode == 'train':
@@ -115,10 +121,9 @@ elif mode == 'test':
 
 n_images = X.shape[0]
 
+intensity = 1
 for idx in range(n_samples):
 	image, target = X[idx % n_images], y[idx % n_images]
-
-	if mode == 'train':
 
 	# Print progress through dataset.
 	if idx % 10 == 0:
@@ -129,21 +134,23 @@ for idx in range(n_samples):
 
 		start = timeit.default_timer()
 
-	# Encode current input example as Poisson spike trains. 
-	inpt = generate_spike_train(image, network.intensity, image_time)
+	inpts = {}
+
+	# Encode current input example as Poisson spike trains.
+	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity, image_time))
 
 	# Run network on Poisson-encoded image data.
-	spikes = network.run(mode=mode, inpt=inpt, time=image_time)
+	spikes = network.run(mode, inpts, image_time)
 
 	# Re-run image if there isn't any network activity.
 	n_retries = 0
 	while np.count_nonzero(spikes['Ae']) < 5 and n_retries < 3:
 		network.intensity += 1; n_retries += 1
-		inpt = generate_spike_train(image, network.intensity, image_time)
+		inpt = generate_spike_train(image, intensity, image_time)
 		spikes = network.run(mode=mode, inpt=inpt, time=image_time)
 
 	# Reset input intensity after any retries.
-	network.intensity = 1
+	intensity = 1
 
 	# Classify network output (spikes) based on historical spiking activity.
 	predictions = network.classify(spikes['Ae'])

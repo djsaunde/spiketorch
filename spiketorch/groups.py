@@ -23,7 +23,7 @@ class InputGroup(Group):
 		super().__init__()
 
 		self.n = n  # No. of neurons.
-		self.spikes = torch.zeros(n)  # Spike occurences.
+		self.s = torch.zeros(n)  # Spike occurences.
 
 		if traces:
 			self.x = torch.zeros(n)  # Firing traces.
@@ -37,7 +37,7 @@ class InputGroup(Group):
 
 		if mode == 'train':
 			# Setting synaptic traces.
-			self.a[self.s.byte()] = 1.0
+			self.x[self.s.byte()] = 1.0
 
 	def get_spikes(self):
 		return self.s
@@ -68,7 +68,7 @@ class LIFGroup(Group):
 
 		self.v = self.rest * torch.ones(n)  # Neuron voltages.
 		self.s = torch.zeros(n)  # Spike occurences.
-		
+
 		if traces:
 			self.x = torch.zeros(n)  # Firing traces.
 
@@ -79,7 +79,7 @@ class LIFGroup(Group):
 	def step(self, inpts, mode):
 		if mode == 'train':
 			# Decay spike traces.
-			self.x -= self.stdp_tc * self.a
+			self.x -= self.stdp_tc * self.x
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
@@ -95,11 +95,23 @@ class LIFGroup(Group):
 		self.v[self.s] = self.reset
 
 		# Integrate input and decay voltages.
-		self.v += inpts - self.voltage_decay * (self.v - self.rest)
+		for key in inpts:
+			self.v += inpts[key]
+
+		self.v -= self.voltage_decay * (self.v - self.rest)
 
 		if mode == 'train':
 			# Setting synaptic traces.
-			self.x[self.s.byte()] = 1.0			
+			self.x[self.s.byte()] = 1.0
+
+	def get_spikes(self):
+		return self.s
+
+	def get_voltages(self):
+		return self.v
+
+	def get_traces(self):
+		return self.traces
 
 
 class AdaptiveLIFGroup(Group):
@@ -121,7 +133,7 @@ class AdaptiveLIFGroup(Group):
 		self.v = self.rest * torch.ones(n)  # Neuron voltages.
 		self.s = torch.zeros(n)  # Spike occurences.
 		self.theta = torch.zeros(n)  # Adaptive threshold parameters.
-		
+
 		if traces:
 			self.x = torch.zeros(n)  # Firing traces.
 
@@ -132,7 +144,7 @@ class AdaptiveLIFGroup(Group):
 	def step(self, inpts, mode):
 		if mode == 'train':
 			# Decay spike traces.
-			self.x -= self.stdp_tc * self.a
+			self.x -= self.stdp_tc * self.x
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
@@ -155,4 +167,13 @@ class AdaptiveLIFGroup(Group):
 
 		if mode == 'train':
 			# Setting synaptic traces.
-			self.a[self.s.byte()] = 1.0
+			self.x[self.s.byte()] = 1.0
+
+	def get_spikes(self):
+		return self.s
+
+	def get_voltages(self):
+		return self.v
+
+	def get_traces(self):
+		return self.traces
