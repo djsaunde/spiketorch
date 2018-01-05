@@ -69,11 +69,10 @@ parser.add_argument('--update_interval', type=int, default=250)
 parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--nu_pre', type=float, default=1e-4)
 parser.add_argument('--nu_post', type=float, default=1e-2)
-parser.add_argument('--c_inhib', type=float, default=17.4)
+parser.add_argument('--c_inhib', type=float, default=-17.4)
 parser.add_argument('--time', type=int, default=350)
 parser.add_argument('--rest', type=int, default=150)
-parser.add_argument('--tc_pre', type=int, default=20)
-parser.add_argument('--tc_post', type=int, default=20)
+parser.add_argument('--trace_tc', type=int, default=5e-2)
 parser.add_argument('--wmax', type=float, default=1.0)
 parser.add_argument('--gpu', type=str, default='True')
 parser.add_argument('--plot', type=str, default='False')
@@ -105,10 +104,17 @@ fname = '_'.join([ str(n_neurons), str(n_train), str(seed) ])
 
 # Initialize the spiking neural network.
 network = Network()
+
+# Add neuron populations.
 network.add_group(InputGroup(n_input, traces=traces), 'X')
-network.add_group(AdaptiveLIFGroup(n_neurons, traces=traces), 'Ae')
-network.add_group(AdaptiveLIFGroup(n_neurons, traces=traces), 'Ai')
-network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae']), name=('X', 'Ae'))
+network.add_group(AdaptiveLIFGroup(n_neurons, traces=traces, rest=-65.0, reset=-65.0,
+			threshold=-52.0, voltage_decay=1e-2, refractory=5, trace_tc=trace_tc), 'Ae')
+network.add_group(LIFGroup(n_neurons, traces=traces, rest=-60.0, reset=-45.0,
+		threshold=-40.0, voltage_decay=1e-1, refractory=2, trace_tc=trace_tc), 'Ai')
+
+# Add synaptic connections between populations
+network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
+				wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
 					w=torch.diag(22.5 * torch.ones(n_neurons))), name=('Ae', 'Ai'))
 network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=c_inhib * \
@@ -133,9 +139,6 @@ spike_monitor = np.zeros([update_interval, n_neurons])
 # Network simulation times.
 image_time = time
 rest_time = rest
-
-# Special "zero data" used for network rest period between examples.
-zero_data = np.zeros([rest_time, n_input])
 
 # Voting schemes and neuron label assignments.
 voting_schemes = ['all']
@@ -162,7 +165,7 @@ elif mode == 'test':
 
 n_images = X.shape[0]
 
-intensity = 0.001
+intensity = 1
 for idx in range(n_samples):
 	image, target = X[idx % n_images], y[idx % n_images]
 

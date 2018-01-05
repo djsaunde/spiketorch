@@ -133,11 +133,13 @@ class ETH:
 		self.s = { 'X' : torch.zeros(n_input), 'Ae' : torch.zeros(n_neurons), 'Ai' : torch.zeros(n_neurons) }
 		# Synaptic traces (used for STDP calculations).
 		self.a = { 'X' : torch.zeros(n_input), 'Ae' : torch.zeros(n_neurons) }
+		
 		# Adaptive additive threshold parameters (used in excitatory layer).
 		if mode == 'train':
 			self.theta = torch.zeros(n_neurons)
 		elif mode == 'test':
 			self.theta = torch.from_numpy(load_params('.'.join(['_'.join(['theta', self.fname]), 'npy']))).cuda()
+		
 		# Refractory period counters.
 		self.refrac_count = { 'Ae' : torch.zeros(n_neurons), 'Ai' : torch.zeros(n_neurons) }
 
