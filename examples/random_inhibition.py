@@ -15,12 +15,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from spiketorch.util import *
 
-model_name = 'eth'
+model_name = 'random_inhibition'
 
-data_path = os.path.join('..', 'data', model_name)
-params_path = os.path.join('..', 'params', model_name)
-assign_path = os.path.join('..', 'assignments', model_name)
-results_path = os.path.join('..', 'results', model_name)
+data_path = os.path.join('..', '..', model_name, 'data')
+params_path = os.path.join('..', '..', model_name, 'params')
+assign_path = os.path.join('..', '..', model_name, 'assignments')
+results_path = os.path.join('..', '..', model_name, 'results')
 
 for path in [ params_path, assign_path, results_path ]:
 	if not os.path.isdir(path):
@@ -31,14 +31,15 @@ np.warnings.filterwarnings('ignore')
 torch.set_printoptions(threshold=np.nan, linewidth=100, edgeitems=10)
 
 
-class ETH:
+class SNN:
 	'''
 	Replication of the spiking neural network model from "Unsupervised learning of digit
 	recognition using spike-timing-dependent plasticity"
 	(https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#).
 	'''
-	def __init__(self, seed=0, mode='train', n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), \
-				c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20), update_interval=100, wmax=1.0, gpu='True'):
+	def __init__(self, seed=0, mode='train', n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, 
+												lrs=(1e-4, 1e-2), c_inhib=17.4, sim_times=(350, 150, 350, 150),
+										stdp_times=(20, 20), update_interval=100, wmax=1.0, gpu='True', p_inhib=0.25):
 		'''
 		Constructs the network based on chosen parameters.
 
@@ -89,19 +90,19 @@ class ETH:
 		if mode == 'train':
 			self.assignments = -1 * torch.ones(n_neurons)
 		elif mode == 'test':
-			self.assignments = torch.from_numpy(load_assignments(model_name, self.fname)).cuda()
+			self.assignments = torch.from_numpy(load_assignments('.'.join(['_'.join(['assignments', self.fname]), 'npy']))).cuda()
 
 		# Instantiate weight matrices.
 		if mode == 'train':
 			self.W = { 'X_Ae' : (torch.rand(n_input, n_neurons) + 0.01) * 0.3, \
 						'Ae_Ai' : torch.diag(22.5 * torch.ones(n_neurons)), \
-						'Ai_Ae' : c_inhib * torch.ones([n_neurons, n_neurons]) \
-								- torch.diag(c_inhib * torch.ones(n_neurons)) }
+						'Ai_Ae' : c_inhib * torch.bernoulli(p_inhib * torch.ones([n_neurons, n_neurons])) \
+							* torch.ones([n_neurons, n_neurons]) - torch.diag(c_inhib * torch.ones(n_neurons)) }
 		elif mode == 'test':
-			self.W = { 'X_Ae' : torch.from_numpy(load_params(model_name, self.fname, 'X_Ae')).cuda(), \
+			self.W = { 'X_Ae' : torch.from_numpy(load_params('.'.join(['_'.join(['X_Ae', self.fname]), 'npy']))).cuda(), \
 						'Ae_Ai' : torch.diag(22.5 * torch.ones(n_neurons)), \
-						'Ai_Ae' : c_inhib * torch.ones([n_neurons, n_neurons]) \
-								- torch.diag(c_inhib * torch.ones(n_neurons)) }
+						'Ai_Ae' : c_inhib * torch.bernoulli(p_inhib * torch.ones([n_neurons, n_neurons])) \
+							* torch.ones([n_neurons, n_neurons]) - torch.diag(c_inhib * torch.ones(n_neurons)) }
 
 		# Simulation parameters.
 		# Rest (decay towards) voltages.
@@ -140,8 +141,11 @@ class ETH:
 		if mode == 'train':
 			self.theta = torch.zeros(n_neurons)
 		elif mode == 'test':
-			self.theta = torch.from_numpy(load_params(model_name, self.fname, 'theta')).cuda()
-		
+			if gpu:
+				self.theta = torch.from_numpy(load_params('.'.join(['_'.join(['theta', self.fname]), 'npy']))).cuda()
+			else:
+				self.theta = torch.from_numpy(load_params('.'.join(['_'.join(['theta', self.fname]), 'npy'])))
+
 		# Refractory period counters.
 		self.refrac_count = { 'Ae' : torch.zeros(n_neurons), 'Ai' : torch.zeros(n_neurons) }
 
@@ -332,13 +336,14 @@ class ETH:
 
 
 if __name__ =='__main__':
-	parser = argparse.ArgumentParser(description='ETH (with LIF neurons) SNN toy model simulation implemented with PyTorch.')
+	parser = argparse.ArgumentParser(description='SNN toy model simulation implemented with PyTorch.')
 	parser.add_argument('--seed', type=int, default=0)
 	parser.add_argument('--mode', type=str, default='train')
 	parser.add_argument('--n_input', type=int, default=784)
 	parser.add_argument('--n_neurons', type=int, default=100)
 	parser.add_argument('--n_train', type=int, default=10000)
 	parser.add_argument('--n_test', type=int, default=10000)
+	parser.add_argument('--p_inhib', type=float, default=0.25)
 	parser.add_argument('--update_interval', type=int, default=250)
 	parser.add_argument('--dt', type=float, default=1)
 	parser.add_argument('--nu_pre', type=float, default=1e-4)
@@ -351,7 +356,7 @@ if __name__ =='__main__':
 	parser.add_argument('--tc_pre', type=int, default=20)
 	parser.add_argument('--tc_post', type=int, default=20)
 	parser.add_argument('--wmax', type=float, default=1.0)
-	parser.add_argument('--gpu', type=str, default='True')
+	parser.add_argument('--gpu', type=str, default='False')
 	parser.add_argument('--plot', type=str, default='False')
 
 	# Place parsed arguments in local scope.
@@ -373,8 +378,8 @@ if __name__ =='__main__':
 	np.random.seed(seed)
 
 	# Initialize the spiking neural network.
-	network = ETH(seed, mode, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
-		(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post), update_interval, wmax, gpu)
+	network = SNN(seed, mode, n_input, n_neurons, (n_train, n_test), dt, (nu_pre, nu_post), c_inhib, \
+		(train_time, train_rest, test_time, test_rest), (tc_pre, tc_post), update_interval, wmax, gpu, p_inhib)
 
 	# Get training, test data from disk.
 	if mode == 'train':
@@ -436,9 +441,9 @@ if __name__ =='__main__':
 					# Save best accuracy.
 					if network.performances[scheme][-1] > best_accuracy:
 						best_accuracy = network.performances[scheme][-1]
-						save_params(model_name, network.get_weights(), network.fname, 'X_Ae')
-						save_params(model_name, network.get_theta(), network.fname, 'theta')
-						save_assignments(model_name, network.get_assignments(), network.fname)
+						save_params(network.get_weights(), '.'.join(['_'.join(['X_Ae', network.fname]), 'npy']))
+						save_params(network.get_theta(), '.'.join(['_'.join(['theta', network.fname]), 'npy']))
+						save_assignments(network.get_assignments(), '.'.join(['_'.join(['assignments', network.fname]), 'npy']))
 
 				print()
 
@@ -486,15 +491,15 @@ if __name__ =='__main__':
 		if plot:
 			if idx == 0:
 				# Create figure for input image and corresponding spike trains.
-				input_figure, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(12, 6))
-				im0 = ax0.imshow(image.reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
-				ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
-				im1 = ax1.imshow(np.sum(inpt, axis=0).reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
-				ax1.set_title('Sum of spike trains')
-				im2 = ax2.imshow(inpt.T, cmap='binary')
-				ax2.set_title('Poisson spiking representation')
+				# input_figure, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(12, 6))
+				# im0 = ax0.imshow(image.reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
+				# ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
+				# im1 = ax1.imshow(np.sum(inpt, axis=0).reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
+				# ax1.set_title('Sum of spike trains')
+				# im2 = ax2.imshow(inpt.T, cmap='binary')
+				# ax2.set_title('Poisson spiking representation')
 
-				plt.tight_layout()
+				# plt.tight_layout()
 
 				# Create figure for excitatory and inhibitory neuron populations.
 				spike_figure, [ax3, ax4] = plt.subplots(2, figsize=(10, 5))
@@ -527,21 +532,22 @@ if __name__ =='__main__':
 
 				plt.tight_layout()
 
-				# Create figure to display plots of training accuracy over time.
-				if mode == 'train':
-					perf_figure, ax11 = plt.subplots()
-					for scheme in network.voting_schemes:
-						ax11.plot(range(len(network.performances[scheme])), network.performances[scheme], label=scheme)
+				# # Create figure to display plots of training accuracy over time.
+				# if mode == 'train':
+				# 	perf_figure, ax11 = plt.subplots()
+				# 	for scheme in network.voting_schemes:
+				# 		ax11.plot(range(len(network.performances[scheme])), network.performances[scheme], label=scheme)
 
-					ax11.set_xlim([0, n_train / update_interval + 1])
-					ax11.set_ylim([0, 1])
-					ax11.set_title('Network performance')
-					ax11.legend()
+				# 	ax11.set_xlim([0, n_train / update_interval + 1])
+				# 	ax11.set_ylim([0, 1])
+				# 	ax11.set_title('Network performance')
+				# 	ax11.legend()
 			else:
 				# Re-draw plotting data after each iteration.
-				im0.set_data(image.reshape(network.n_input_sqrt, network.n_input_sqrt))
-				im1.set_data(np.sum(inpt, axis=0).reshape(network.n_input_sqrt, network.n_input_sqrt))
-				im2.set_data(inpt.T)
+				# im0.set_data(image.reshape(network.n_input_sqrt, network.n_input_sqrt))
+				# im1.set_data(np.sum(inpt, axis=0).reshape(network.n_input_sqrt, network.n_input_sqrt))
+				# im2.set_data(inpt.T)
+
 				im3.set_data(spikes['Ae'].T)
 				im4.set_data(spikes['Ai'].T)
 
@@ -552,22 +558,20 @@ if __name__ =='__main__':
 				assignments = network.get_assignments().reshape([network.n_neurons_sqrt, network.n_neurons_sqrt]).T
 				im6.set_data(assignments)
 
-				if mode == 'train':
-					ax11.clear()
-					for scheme in network.voting_schemes:
-						ax11.plot(range(len(network.performances[scheme])), network.performances[scheme], label=scheme)
+				# if mode == 'train':
+				# 	ax11.clear()
+				# 	for scheme in network.voting_schemes:
+				# 		ax11.plot(range(len(network.performances[scheme])), network.performances[scheme], label=scheme)
 
-					ax11.set_xlim([0, n_train / update_interval])
-					ax11.set_ylim([0, 1])
-					ax11.set_title('Network performance')
-					ax11.legend()
+				# 	ax11.set_xlim([0, n_train / update_interval])
+				# 	ax11.set_ylim([0, 1])
+				# 	ax11.set_title('Network performance')
+				# 	ax11.legend()
 
-				# Update title of input digit plot to reflect current iteration.
-				ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
+				# # Update title of input digit plot to reflect current iteration.
+				# ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
 			
 			plt.pause(1e-8)
-
-	print()
 
 	results = {}
 	for scheme in network.voting_schemes:
@@ -577,13 +581,12 @@ if __name__ =='__main__':
 		elif mode == 'test':
 			results[scheme] = 100 * total_correct[scheme] / n_test
 			print('Test accuracy for voting scheme %s:' % scheme, results[scheme])
-		print()
 
 	# Save out network parameters and assignments for the test phase.
 	if mode == 'train':
-		save_params(model_name, network.get_weights(), network.fname, 'X_Ae')
-		save_params(model_name, network.get_theta(), network.fname, 'theta')
-		save_assignments(model_name, network.get_assignments(), network.fname)
+		save_params(network.get_weights(), '.'.join(['_'.join(['X_Ae', network.fname]), 'npy']))
+		save_params(network.get_theta(), '.'.join(['_'.join(['theta', network.fname]), 'npy']))
+		save_assignments(network.get_assignments(), '.'.join(['_'.join(['assignments', network.fname]), 'npy']))
 
 	if mode == 'test':
 		results = pd.DataFrame([ [ network.fname ] + list(results.values()) ], \

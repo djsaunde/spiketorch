@@ -136,7 +136,7 @@ def generate_2d_spike_train(image, intensity, time):
 	return spikes.reshape([time, 1, n_input_sqrt, n_input_sqrt])
 
 
-def save_params(params, fname):
+def save_params(model_name, params, fname, prefix):
 	'''
 	Save network params to disk.
 
@@ -144,23 +144,24 @@ def save_params(params, fname):
 		- params (numpy.ndarray): Array of params to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(params_path, fname), params)
+	np.save(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'), params)
 
 
-def load_params(fname):
+def load_params(model_name, fname, prefix):
 	'''
 	Load network params from disk.
 
 	Arguments:
 		- fname (str): File name of file to read from.
+		- prefix (str): Name of the parameters to read from disk.
 
 	Returns:
 		- params (numpy.ndarray): Params stored in file `fname`.
 	'''
-	return np.load(os.path.join(params_path, fname))
+	return np.load(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'))
 
 
-def save_assignments(assignments, fname):
+def save_assignments(model_name, assignments, fname):
 	'''
 	Save network assignments to disk.
 
@@ -168,10 +169,10 @@ def save_assignments(assignments, fname):
 		- assignments (numpy.ndarray): Array of assignments to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(assign_path, fname), assignments)
+	np.save(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'), assignments)
 
 
-def load_assignments(fname):
+def load_assignments(model_name, fname):
 	'''
 	Save network assignments to disk.
 
@@ -181,7 +182,7 @@ def load_assignments(fname):
 	Returns:
 		- assignments (numpy.ndarray): Assignments stored in file `fname`.
 	'''
-	return np.load(os.path.join(assign_path, fname))
+	return np.load(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'))
 
 
 def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
