@@ -102,6 +102,40 @@ def generate_spike_train(image, intensity, time):
 	return spikes
 
 
+def generate_2d_spike_train(image, intensity, time):
+	'''
+	Generates Poisson spike trains based on image ink intensity.
+	'''
+	# Multiply image by desired intensity.
+	image = image * intensity
+
+	# Get number of input neurons.
+	n_input = image.shape[0]
+	n_input_sqrt = int(np.sqrt(n_input))
+	
+	# Image data preprocessing (divide by 4, invert (for spike rates),
+	# multiply by 1000 (conversion from milliseconds to seconds).
+	image = (1 / (image / 4)) * 1000
+	image[np.isinf(image)] = 0
+	
+	# Make the spike data.
+	spike_times = np.random.poisson(image, [time, n_input])
+	spike_times = np.cumsum(spike_times, axis=0)
+	spike_times[spike_times >= time] = 0
+
+	# Create spikes matrix from spike times.
+	spikes = np.zeros([time, n_input])
+	for idx in range(time):
+		spikes[spike_times[idx, :], np.arange(n_input)] = 1
+
+	# Temporary fix: The above code forces a spike from
+	# every input neuron on the first time step.
+	spikes[0, :] = 0
+
+	# Return the input spike occurrence matrix.
+	return spikes.reshape([time, 1, n_input_sqrt, n_input_sqrt])
+
+
 def save_params(params, fname):
 	'''
 	Save network params to disk.

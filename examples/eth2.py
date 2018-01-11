@@ -249,7 +249,7 @@ for idx in range(n_samples):
 
 	# Re-run image if there isn't any network activity.
 	n_retries = 0
-	while np.count_nonzero(torch.nonzero(spikes['Ae']).size()) < 5 and n_retries < 3:
+	while torch.nonzero(spikes['Ae']).size(0) < 5 and n_retries < 3:
 		intensity += 1; n_retries += 1
 		inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity, image_time))
 		spikes = network.run(mode=mode, inpts=inpts, time=image_time)

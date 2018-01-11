@@ -13,7 +13,7 @@ from struct import unpack
 from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .util import *
+from spiketorch.util import *
 
 data_path = os.path.join('..', '..', 'data')
 params_path = os.path.join('..', '..', 'params')
@@ -35,7 +35,7 @@ class ETH:
 	recognition using spike-timing-dependent plasticity"
 	(https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#).
 	'''
-	def __init__(self, mode='train', seed=0, n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), \
+	def __init__(self, seed=0, mode='train', n_input=784, n_neurons=100, n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), \
 				c_inhib=17.4, sim_times=(350, 150, 350, 150), stdp_times=(20, 20), update_interval=100, wmax=1.0, gpu='True'):
 		'''
 		Constructs the network based on chosen parameters.

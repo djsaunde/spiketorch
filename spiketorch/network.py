@@ -63,8 +63,8 @@ class Network:
 				if type(self.groups[key]) != spiketorch.groups.InputGroup:
 					self.groups[key].step(inpts[key], mode)
 
-				# Record spikes from this population at this timestep.
-				spikes[key][timestep, :] = self.groups[key].s
+					# Record spikes from this population at this timestep.
+					spikes[key][timestep, :] = self.groups[key].s
 
 			# Update synapse weights if we're in training mode.
 			if mode == 'train':
