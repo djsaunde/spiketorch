@@ -90,7 +90,10 @@ class SNN:
 		if mode == 'train':
 			self.assignments = -1 * torch.ones(n_exc)
 		elif mode == 'test':
-			self.assignments = torch.from_numpy(load_assignments(model_name, self.fname)).cuda()
+			if gpu:
+				self.assignments = torch.from_numpy(load_assignments(model_name, self.fname)).cuda()
+			else:
+				self.assignments = torch.from_numpy(load_assignments(model_name, self.fname))
 
 		# Instantiate weight matrices.
 		if mode == 'train':
@@ -393,7 +396,7 @@ if __name__ =='__main__':
 	parser.add_argument('--tc_post', type=int, default=20)
 	parser.add_argument('--wmax', type=float, default=1.0)
 	parser.add_argument('--start_intensity', type=float, default=1.0)
-	parser.add_argument('--gpu', type=str, default='False')
+	parser.add_argument('--gpu', type=str, default='True')
 	parser.add_argument('--plot', type=str, default='False')
 
 	# Place parsed arguments in local scope.
@@ -408,7 +411,7 @@ if __name__ =='__main__':
 
 	print('\n')
 
-	# Convert string arguments into boolean datatype.
+	# Convert string arguments into booleans.
 	plot = plot == 'True'
 	gpu = gpu == 'True'
 
