@@ -4,7 +4,7 @@ Python package used for simulating spiking neural networks (SNNs) in [PyTorch](h
 
 At the moment, the focus is on replicating the SNN described in [Unsupervised learning of digit recognition using spike-timing-dependent plasticity](https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#) (original code found [here](https://github.com/peter-u-diehl/stdp-mnist), extensions thereof found in my previous project repository [here](https://github.com/djsaunde/stdp-mnist)).
 
-At the moment, we are only interested in applying SNNs to simple machine learning (ML) tasks, but the code can be used for any purpose.
+We are currently interested in applying SNNs to simple machine learning (ML) tasks, but the code can be used for any purpose.
 
 ## Background
 
