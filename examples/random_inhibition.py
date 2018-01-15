@@ -441,9 +441,9 @@ if __name__ =='__main__':
 					# Save best accuracy.
 					if network.performances[scheme][-1] > best_accuracy:
 						best_accuracy = network.performances[scheme][-1]
-						save_params(network.get_weights(), '.'.join(['_'.join(['X_Ae', network.fname]), 'npy']))
-						save_params(network.get_theta(), '.'.join(['_'.join(['theta', network.fname]), 'npy']))
-						save_assignments(network.get_assignments(), '.'.join(['_'.join(['assignments', network.fname]), 'npy']))
+						save_params(model_name, network.get_weights(), network.fname, 'X_Ae')
+						save_params(model_name, network.get_theta(), network.fname, 'theta')
+						save_assignments(model_name, network.get_assignments(), '.'.join(['_'.join(['assignments', network.fname]), 'npy']))
 
 				print()
 
@@ -584,9 +584,11 @@ if __name__ =='__main__':
 
 	# Save out network parameters and assignments for the test phase.
 	if mode == 'train':
-		save_params(network.get_weights(), '.'.join(['_'.join(['X_Ae', network.fname]), 'npy']))
-		save_params(network.get_theta(), '.'.join(['_'.join(['theta', network.fname]), 'npy']))
-		save_assignments(network.get_assignments(), '.'.join(['_'.join(['assignments', network.fname]), 'npy']))
+		save_params(model_name, network.get_weights(), network.fname, 'X_Ae')
+		save_params(model_name, network.get_excitatory_weights(), network.fname, 'Ae_Ai')
+		save_params(model_name, network.get_inhibitory_weights(), network.fname, 'Ai_Ae')
+		save_params(model_name, network.get_theta(), network.fname, 'theta')
+		save_assignments(model_name, network.get_assignments(), network.fname)
 
 	if mode == 'test':
 		results = pd.DataFrame([ [ network.fname ] + list(results.values()) ], \
