@@ -77,7 +77,7 @@ class SNN:
 			torch.cuda.manual_seed_all(seed)
 
 		# Generic filename for saving out weights and other parameters. 
-		self.fname = '_'.join([ str(n_exc), str(n_inh), str(n_examples[0]), str(seed) ])
+		self.fname = '_'.join([ str(n_exc), str(n_inh), str(n_inh_synapse), str(n_examples[0]), str(seed) ])
 
 		# Population names.
 		self.populations = ['Ae', 'Ai']
