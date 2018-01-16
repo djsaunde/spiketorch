@@ -123,6 +123,10 @@ print('\n')
 
 # Convert string arguments into boolean datatype.
 plot = plot == 'True'
+gpu = gpu == 'True'
+
+if gpu:
+	torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 # Set random number generator.
 np.random.seed(seed)
