@@ -5,7 +5,7 @@ do
 	do
 		for n_train in 60000 120000 180000
 		do
-			sbatch run_eth_test.sh $seed $n_neurons $n_train
+			sbatch eth_test.sh $seed $n_neurons $n_train
 		done
 	done
 done
