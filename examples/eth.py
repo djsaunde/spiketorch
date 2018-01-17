@@ -83,7 +83,7 @@ def assign_labels(inputs, outputs, rates, assignments):
 			rates[:, j] = 0.9 * rates[:, j] + torch.sum(outputs[idxs], 0) / n_inputs
 
 	# Assignments of neurons are the categories for which they fire the most. 
-	assignments = torch.max(self.rates, 1)[1]
+	assignments = torch.max(rates, 1)[1]
 
 	return rates, assignments
 
@@ -202,6 +202,8 @@ elif mode == 'test':
 
 n_images = X.shape[0]
 
+best_accuracy = -np.inf
+
 intensity = 1
 for idx in range(n_samples):
 	image, target = X[idx % n_images], y[idx % n_images]
@@ -216,7 +218,7 @@ for idx in range(n_samples):
 			for scheme in performances.keys():
 				performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
 				correct[scheme] = 0  # Reset number of correct examples.
-				print(scheme, ':', network.performances[scheme])
+				print(scheme, ':', performances[scheme])
 
 				# Save best accuracy.
 				if performances[scheme][-1] > best_accuracy:
@@ -231,9 +233,9 @@ for idx in range(n_samples):
 						theta = network.get_theta('Ae').numpy()
 						asgnmts = assignments.numpy()
 
-					save_params(weights, '.'.join(['_'.join(['X_Ae', fname]), 'npy']))
-					save_params(theta, '.'.join(['_'.join(['theta', fname]), 'npy']))
-					save_assignments(asgnmts, '.'.join(['_'.join(['assignments', fname]), 'npy']))
+					save_params(model_name, network.get_weights(('X', 'Ae')), fname, 'X_Ae')
+					save_params(model_name, network.get_theta('Ae'), fname, 'theta')
+					save_assignments(model_name, assignments, fname)
 
 			# Save sequence of performance estimates to file.
 			p.dump(performances, open(os.path.join(performance_path, fname), 'wb'))
@@ -393,9 +395,9 @@ for scheme in voting_schemes:
 
 # Save out network parameters and assignments for the test phase.
 if mode == 'train':
-	save_params(network.get_weights(), '.'.join(['_'.join(['X_Ae', fname]), 'npy']))
-	save_params(network.get_theta(), '.'.join(['_'.join(['theta', fname]), 'npy']))
-	save_assignments(network.get_assignments(), '.'.join(['_'.join(['assignments', fname]), 'npy']))
+	save_params(model_name, network.get_weights(('X', 'Ae')), fname, 'X_Ae')
+	save_params(model_name, network.get_theta('Ae'), fname, 'theta')
+	save_assignments(model_name, assignments, fname)
 
 if mode == 'test':
 	results = pd.DataFrame([ [ fname ] + list(results.values()) ], \
@@ -408,3 +410,5 @@ if mode == 'test':
 		all_results = pd.read_csv(os.path.join(results_path, results_fname))
 		all_results = pd.concat([all_results, results], ignore_index=True)
 		all_results.to_csv(os.path.join(results_path, results_fname), index=False)
+
+print()

@@ -4,10 +4,11 @@
 # MNIST dataset.
 *-ubyte
 
-# Parameters, assignments, and results.
+# Parameters, assignments, results, performances.
 params/
 assignments/
 results/
+performances/
 
 # PyCache (whatever that is!)
 spiketorch/__pycache__
