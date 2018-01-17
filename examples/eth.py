@@ -132,8 +132,7 @@ if gpu:
 np.random.seed(seed)
 
 # Record decaying spike traces to use STDP.
-if mode == 'train':
-	traces = True
+traces = mode == 'train'
 
 # Build filename from command-line arguments.
 fname = '_'.join([ str(n_neurons), str(n_train), str(seed) ])
@@ -149,8 +148,19 @@ network.add_group(LIFGroup(n_neurons, traces=traces, rest=-60.0, reset=-45.0,
 		threshold=-40.0, voltage_decay=1e-1, refractory=2, trace_tc=trace_tc), 'Ai')
 
 # Add synaptic connections between populations
-network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
-				wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+if mode == 'train':
+	network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
+					wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+elif mode == 'test':
+	if gpu:
+		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
+					w=torch.from_numpy(load_params(model_name, fname, 'X_Ae')).cuda(),
+						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+	else:
+		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
+							w=torch.from_numpy(load_params(model_name, fname, 'X_Ae')),
+						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
 					w=torch.diag(22.5 * torch.ones(n_neurons))), name=('Ae', 'Ai'))
 network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=c_inhib * \
@@ -233,9 +243,14 @@ for idx in range(n_samples):
 						theta = network.get_theta('Ae').numpy()
 						asgnmts = assignments.numpy()
 
-					save_params(model_name, network.get_weights(('X', 'Ae')), fname, 'X_Ae')
-					save_params(model_name, network.get_theta('Ae'), fname, 'theta')
-					save_assignments(model_name, assignments, fname)
+					if gpu:
+						save_params(model_name, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
+						save_params(model_name, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
+						save_assignments(model_name, assignments.cpu().numpy(), fname)
+					else:
+						save_params(model_name, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
+						save_params(model_name, network.get_theta('Ae').numpy(), fname, 'theta')
+						save_assignments(model_name, assignments.numpy(), fname)
 
 			# Save sequence of performance estimates to file.
 			p.dump(performances, open(os.path.join(performance_path, fname), 'wb'))
@@ -395,13 +410,17 @@ for scheme in voting_schemes:
 
 # Save out network parameters and assignments for the test phase.
 if mode == 'train':
-	save_params(model_name, network.get_weights(('X', 'Ae')), fname, 'X_Ae')
-	save_params(model_name, network.get_theta('Ae'), fname, 'theta')
-	save_assignments(model_name, assignments, fname)
+	if gpu:
+		save_params(model_name, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
+		save_params(model_name, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
+		save_assignments(model_name, assignments.cpu().numpy(), fname)
+	else:
+		save_params(model_name, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
+		save_params(model_name, network.get_theta('Ae').numpy(), fname, 'theta')
+		save_assignments(model_name, assignments.numpy(), fname)
 
 if mode == 'test':
-	results = pd.DataFrame([ [ fname ] + list(results.values()) ], \
-								columns=[ 'Parameters' ] + list(results.keys()))
+	results = pd.DataFrame([[fname] + list(results.values())], columns=['Parameters'] + list(results.keys()))
 
 	results_fname = '_'.join([str(n_neurons), str(n_train), 'results.csv'])
 	if not results_fname in os.listdir(results_path):
