@@ -15,3 +15,6 @@ spiketorch/__pycache__
 
 # Job reports (from HPC experiments)
 job_reports/
+
+# IPython notebook checkpoints
+*.ipynb_checkpoints
