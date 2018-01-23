@@ -39,7 +39,7 @@ class conv_ETH:
 	'''
 	def __init__(self, seed=0, mode='train', n_input=784, n_patches=100, kernel_size=16, stride=4, 
 					n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), c_inhib=17.4, sim_times=(350, 
-					150, 350, 150), stdp_times=(20, 20), update_interval=100, wmax=1.0, gpu='True'):
+					150, 350, 150), stdp_times=(20, 20), update_interval=100, wmax=1.0, gpu=True):
 		'''
 		Constructs the network based on chosen parameters.
 
@@ -73,6 +73,16 @@ class conv_ETH:
 		self.gpu = gpu == 'True' and torch.cuda.is_available()
 
 		self.n_neurons = int(((self.n_input_sqrt - kernel_size) / stride + 1) ** 2) * n_patches
+		self.n_patch_neurons = int(self.n_neurons / self.n_patches)
+		self.n_patch_neurons_sqrt = int(np.sqrt(self.n_patch_neurons))
+
+		print(self.n_patch_neurons)
+		print(self.n_patch_neurons_sqrt)
+		
+		self.convolution_locations = torch.zeros(self.n_neurons, self.n_input).byte()
+		
+		for neuron in range(self.n_neurons):
+			self.convolution_locations[neuron] = torch.IntTensor(get_convolution_locations(neuron, self.n_patch_neurons_sqrt, self.n_input_sqrt, kernel_size, stride))
 
 		torch.manual_seed(seed)
 
@@ -218,14 +228,17 @@ class conv_ETH:
 				self.a['X'][self.s['X'].byte()] = 1.0
 				self.a['Ae'][self.s['Ae'].byte()] = 1.0
 
-				print(self.W['X_Ae'].shape, self.a['X'].shape, self.s['Ae'].shape)
-
 				# Perform STDP weight update.
-				# Post-synaptic.
-				self.W['X_Ae'] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input, 1) * self.s['Ae'].float().view(1, self.n_neurons))
-				# Pre-synaptic.
-				self.W['X_Ae'] -= self.lrs['nu_pre'] * (self.s['X'].float().view(self.n_input, 1) * self.a['Ae'].view(1, self.n_neurons))
-
+				for neuron in range(self.n_neurons):
+					# Post-synaptic.				
+					self.W['X_Ae'][neuron // self.n_patches] += self.lrs['nu_post'] * \
+						(self.a['X'].view(self.n_input, 1)[self.convolution_locations[neuron]] * \
+														self.s['Ae'][neuron].float().view(1, 1))
+					# Pre-synaptic.
+					self.W['X_Ae'][neuron // self.n_patches] -= self.lrs['nu_pre'] * \
+						(self.s['X'].float().view(self.n_input, 1)[self.convolution_locations[neuron]] * \
+														self.a['Ae'][neuron].view(1, 1))
+					
 				# Ensure that weights are within [0, self.wmax].
 				self.W['X_Ae'] = torch.clamp(self.W['X_Ae'], 0, self.wmax)
 
@@ -365,7 +378,7 @@ if __name__ =='__main__':
 	parser.add_argument('--tc_pre', type=int, default=20)
 	parser.add_argument('--tc_post', type=int, default=20)
 	parser.add_argument('--wmax', type=float, default=1.0)
-	parser.add_argument('--gpu', type=str, default='True')
+	parser.add_argument('--gpu', type=str, default='False')
 	parser.add_argument('--plot', type=str, default='False')
 
 	# Place parsed arguments in local scope.
@@ -381,6 +394,7 @@ if __name__ =='__main__':
 	print('\n')
 
 	# Convert string arguments into boolean datatype.
+	gpu = gpu == 'True'
 	plot = plot == 'True'
 
 	# Set random number generator.

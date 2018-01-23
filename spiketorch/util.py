@@ -201,3 +201,19 @@ def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
 						filtr.reshape([n_input_sqrt, n_input_sqrt])
 	
 	return square_weights
+
+
+def get_convolution_locations(neuron, n_patch_neurons_sqrt, n_input_sqrt, kernel_size, stride):
+	convolution_locations = [0] * (n_input_sqrt ** 2)
+
+	for x in range(kernel_size):
+		for y in range(kernel_size):
+			print('***', x, y, '***')
+
+			print((((neuron % n_patch_neurons_sqrt) * stride + (neuron // \
+				n_patch_neurons_sqrt) * n_input_sqrt * stride) + (x * n_input_sqrt) + y))
+
+			convolution_locations[(((neuron % n_patch_neurons_sqrt) * stride + (neuron // \
+				n_patch_neurons_sqrt) * n_input_sqrt * stride) + (x * n_input_sqrt) + y)] = 1
+
+	return convolution_locations
