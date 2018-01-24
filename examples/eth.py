@@ -98,15 +98,15 @@ parser.add_argument('--n_neurons', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--update_interval', type=int, default=250)
-parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--nu_pre', type=float, default=1e-4)
 parser.add_argument('--nu_post', type=float, default=1e-2)
-parser.add_argument('--c_inhib', type=float, default=-17.4)
+parser.add_argument('--c_excite', type=float, default=22.5)
+parser.add_argument('--c_inhib', type=float, default=-17.5)
 parser.add_argument('--time', type=int, default=350)
 parser.add_argument('--rest', type=int, default=150)
 parser.add_argument('--trace_tc', type=int, default=5e-2)
 parser.add_argument('--wmax', type=float, default=1.0)
-parser.add_argument('--gpu', type=str, default='True')
+parser.add_argument('--gpu', type=str, default='False')
 parser.add_argument('--plot', type=str, default='False')
 
 # Place parsed arguments in local scope.
@@ -135,7 +135,7 @@ np.random.seed(seed)
 traces = mode == 'train'
 
 # Build filename from command-line arguments.
-fname = '_'.join([ str(n_neurons), str(n_train), str(seed) ])
+fname = '_'.join([ str(n_neurons), str(n_train), str(seed), str(c_inhib), str(c_excite), str(wmax) ])
 
 # Initialize the spiking neural network.
 network = Network()
@@ -162,7 +162,7 @@ elif mode == 'test':
 						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
 
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
-					w=torch.diag(22.5 * torch.ones(n_neurons))), name=('Ae', 'Ai'))
+					w=torch.diag(c_excite * torch.ones(n_neurons))), name=('Ae', 'Ai'))
 network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=c_inhib * \
 							torch.ones([n_neurons, n_neurons]) - torch.diag(c_inhib \
 											* torch.ones(n_neurons))), name=('Ai', 'Ae'))
@@ -315,7 +315,7 @@ for idx in range(n_samples):
 			input_exc_weights = network.synapses[('X', 'Ae')].w.numpy()
 			asgnmts = assignments.numpy()
 			Ae_voltages = network.groups['Ae'].get_voltages().numpy()
-
+			
 		if idx == 0:
 			# Create figure for input image and corresponding spike trains.
 			input_figure, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(12, 6))

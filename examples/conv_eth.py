@@ -37,7 +37,7 @@ class conv_ETH:
 	recognition using spike-timing-dependent plasticity"
 	(https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#).
 	'''
-	def __init__(self, seed=0, mode='train', n_input=784, n_patches=100, kernel_size=16, stride=4, 
+	def __init__(self, seed=0, mode='train', n_input=784, n_patches=25, kernel_size=16, stride=4, 
 					n_examples=(10000, 10000), dt=1, lrs=(1e-4, 1e-2), c_inhib=17.4, sim_times=(350, 
 					150, 350, 150), stdp_times=(20, 20), update_interval=100, wmax=1.0, gpu=True):
 		'''
@@ -76,13 +76,10 @@ class conv_ETH:
 		self.n_patch_neurons = int(self.n_neurons / self.n_patches)
 		self.n_patch_neurons_sqrt = int(np.sqrt(self.n_patch_neurons))
 
-		print(self.n_patch_neurons)
-		print(self.n_patch_neurons_sqrt)
+		self.conv_locations = torch.zeros(self.n_neurons, self.n_input).byte()
 		
-		self.convolution_locations = torch.zeros(self.n_neurons, self.n_input).byte()
-		
-		for neuron in range(self.n_neurons):
-			self.convolution_locations[neuron] = torch.IntTensor(get_convolution_locations(neuron, self.n_patch_neurons_sqrt, self.n_input_sqrt, kernel_size, stride))
+		for neuron in range(self.n_patch_neurons):
+			self.conv_locations[neuron] = torch.IntTensor(get_convolution_locations(neuron, self.n_patch_neurons_sqrt, self.n_input_sqrt, kernel_size, stride))
 
 		torch.manual_seed(seed)
 
@@ -141,7 +138,7 @@ class conv_ETH:
 		# Etc.
 		self.intensity = 1
 		self.wmax = wmax
-		self.norm = 78.0 * wmax
+		self.norm = (78.0 * wmax) * ((kernel_size ** 2) / 784)
 
 		# Instantiate neuron state variables.
 		# Neuron voltages.
@@ -215,10 +212,10 @@ class conv_ETH:
 			expanded_input = self.s['X'].view(1, 1, self.n_input_sqrt, self.n_input_sqrt).expand(self.n_patches, 1, self.n_input_sqrt, self.n_input_sqrt).float()
 
 			# Calculate input to excitatory layer contribution.
-			inpt = conv2d(Variable(expanded_input), Variable(self.W['X_Ae']), stride=self.stride).sum(1).view(-1).data
+			conv_input = conv2d(Variable(expanded_input), Variable(self.W['X_Ae']), stride=self.stride).sum(1).view(-1).data
 
 			# Integrate input and decay voltages.
-			self.v['Ae'] += inpt - self.s['Ai'].float() @ self.W['Ai_Ae']
+			self.v['Ae'] += conv_input - self.s['Ai'].float() @ self.W['Ai_Ae']
 			self.v['Ae'] -= self.v_decay['Ae'] * (self.v['Ae'] - self.rest['Ae'])
 			self.v['Ai'] += self.s['Ae'].float() @ self.W['Ae_Ai']
 			self.v['Ai'] -= self.v_decay['Ai'] * (self.v['Ai'] - self.rest['Ai'])
@@ -229,16 +226,21 @@ class conv_ETH:
 				self.a['Ae'][self.s['Ae'].byte()] = 1.0
 
 				# Perform STDP weight update.
+				start = timeit.default_timer()
 				for neuron in range(self.n_neurons):
+					visual_field = neuron // self.n_patches
+					patch = neuron // self.n_patch_neurons
+
 					# Post-synaptic.				
-					self.W['X_Ae'][neuron // self.n_patches] += self.lrs['nu_post'] * \
-						(self.a['X'].view(self.n_input, 1)[self.convolution_locations[neuron]] * \
-														self.s['Ae'][neuron].float().view(1, 1))
+					self.W['X_Ae'][patch] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input,
+											1)[self.conv_locations[visual_field]] * self.s['Ae'][neuron])
+
 					# Pre-synaptic.
-					self.W['X_Ae'][neuron // self.n_patches] -= self.lrs['nu_pre'] * \
-						(self.s['X'].float().view(self.n_input, 1)[self.convolution_locations[neuron]] * \
-														self.a['Ae'][neuron].view(1, 1))
-					
+					self.W['X_Ae'][patch] -= self.lrs['nu_pre'] * (self.s['X'].float().view(self.n_input,
+													1)[self.conv_locations[visual_field]] * self.a['Ae'][neuron])
+				
+				print('Time: %.4f' % (timeit.default_timer() - start))
+
 				# Ensure that weights are within [0, self.wmax].
 				self.W['X_Ae'] = torch.clamp(self.W['X_Ae'], 0, self.wmax)
 
@@ -297,7 +299,7 @@ class conv_ETH:
 		'''
 		Normalize weights on synpases from input to excitatory layer.
 		'''
-		self.W['X_Ae'] *= self.norm / self.W['X_Ae'].sum(0).view(1, -1)
+		self.W['X_Ae'] *= self.norm / self.W['X_Ae'].sum(2).sum(2).view(-1, 1, 1, 1)
 
 
 	def assign_labels(self, inputs, outputs):
@@ -361,7 +363,7 @@ if __name__ =='__main__':
 	parser.add_argument('--seed', type=int, default=0)
 	parser.add_argument('--mode', type=str, default='train')
 	parser.add_argument('--n_input', type=int, default=784)
-	parser.add_argument('--n_patches', type=int, default=32)
+	parser.add_argument('--n_patches', type=int, default=25)
 	parser.add_argument('--kernel_size', type=int, default=16)
 	parser.add_argument('--stride', type=int, default=4)
 	parser.add_argument('--n_train', type=int, default=10000)
@@ -519,7 +521,7 @@ if __name__ =='__main__':
 				ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
 				im1 = ax1.imshow(np.sum(inpt, axis=0).reshape(network.n_input_sqrt, network.n_input_sqrt), cmap='binary')
 				ax1.set_title('Sum of spike trains')
-				im2 = ax2.imshow(inpt.T, cmap='binary')
+				im2 = ax2.imshow(inpt.reshape(image_time, n_input).T, cmap='binary')
 				ax2.set_title('Poisson spiking representation')
 
 				plt.tight_layout()
@@ -535,13 +537,14 @@ if __name__ =='__main__':
 
 				# Create figure for input to excitatory weights and excitatory neuron assignments.
 				weights_figure, [ax5, ax6] = plt.subplots(1, 2, figsize=(10, 6))
-				square_weights = get_square_weights(network.get_weights(), network.n_input_sqrt, network.n_neurons_sqrt)
+				square_weights = get_conv_weights(network.get_weights(), network.kernel_size,
+								network.stride, network.n_patches, network.n_patch_neurons)
 
 				im5 = ax5.imshow(square_weights, cmap='hot_r', vmin=0, vmax=network.wmax)
 				ax5.set_title('Input to excitatory weights')
 				
 				color = plt.get_cmap('RdBu', 11)
-				assignments = network.get_assignments().reshape([network.n_neurons_sqrt, network.n_neurons_sqrt]).T
+				assignments = network.get_assignments().reshape([network.n_patch_neurons, network.n_patches]).T
 				im6 = ax6.matshow(assignments, cmap=color, vmin=-1.5, vmax=9.5)
 				ax6.set_title('Neuron labels')
 
@@ -569,15 +572,16 @@ if __name__ =='__main__':
 				# Re-draw plotting data after each iteration.
 				im0.set_data(image.reshape(network.n_input_sqrt, network.n_input_sqrt))
 				im1.set_data(np.sum(inpt, axis=0).reshape(network.n_input_sqrt, network.n_input_sqrt))
-				im2.set_data(inpt.T)
+				im2.set_data(inpt.reshape(image_time, n_input).T)
 				im3.set_data(spikes['Ae'].T)
 				im4.set_data(spikes['Ai'].T)
 
-				square_weights = get_square_weights(network.get_weights(), network.n_input_sqrt, network.n_neurons_sqrt)
+				square_weights = get_conv_weights(network.get_weights(), network.kernel_size,
+								network.stride, network.n_patches, network.n_patch_neurons)
 				
 				im5.set_data(square_weights)
 
-				assignments = network.get_assignments().reshape([network.n_neurons_sqrt, network.n_neurons_sqrt]).T
+				assignments = network.get_assignments().reshape([network.n_patch_neurons, network.n_patches]).T
 				im6.set_data(assignments)
 
 				if mode == 'train':

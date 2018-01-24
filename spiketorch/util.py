@@ -3,6 +3,7 @@ import sys
 import torch
 import numpy as np
 import pickle as p
+
 from struct import unpack
 
 data_path = os.path.join('..', 'data')
@@ -203,16 +204,24 @@ def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
 	return square_weights
 
 
+def get_conv_weights(weights, kernel_size, stride, n_patches, n_patch_neurons):
+	n_patches_sqrt = int(np.sqrt(n_patches))
+	n_patch_neurons_sqrt = int(np.sqrt(n_patch_neurons))
+
+	rearranged = np.zeros([kernel_size * n_patch_neurons, kernel_size * n_patches])
+
+	for patch in range(n_patches):
+		for neuron in range(n_patch_neurons):
+			rearranged[kernel_size * neuron : kernel_size * (neuron + 1), kernel_size * patch : kernel_size * (patch + 1)] = weights[patch]
+
+	return rearranged.T
+
+
 def get_convolution_locations(neuron, n_patch_neurons_sqrt, n_input_sqrt, kernel_size, stride):
 	convolution_locations = [0] * (n_input_sqrt ** 2)
 
 	for x in range(kernel_size):
 		for y in range(kernel_size):
-			print('***', x, y, '***')
-
-			print((((neuron % n_patch_neurons_sqrt) * stride + (neuron // \
-				n_patch_neurons_sqrt) * n_input_sqrt * stride) + (x * n_input_sqrt) + y))
-
 			convolution_locations[(((neuron % n_patch_neurons_sqrt) * stride + (neuron // \
 				n_patch_neurons_sqrt) * n_input_sqrt * stride) + (x * n_input_sqrt) + y)] = 1
 
