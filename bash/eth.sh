@@ -1,8 +1,7 @@
 #!/bin/bash
 #
-#SBATCH --partition=titanx-long
-#SBATCH --gres=gpu:1
-#SBATCH --time=03-00:00:00
+#SBATCH --partition=longq
+#SBATCH --time=02-00:00:00
 #SBATCH --mem=16000
 #SBATCH --account=rkozma
 #SBATCH --output=/mnt/nfs/work1/rkozma/djsaunde/spiketorch/job_reports/eth_%j.out
@@ -10,7 +9,7 @@
 seed=${1:-0}
 n_neurons=${2:-100}
 n_train=${3:-60000}
-c_excite=${4:22.5}
+c_excite=${4:-22.5}
 c_inhib=${5:-17.5}
 wmax=${6:-1.0}
 
