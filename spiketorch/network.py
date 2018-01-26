@@ -1,12 +1,15 @@
 import torch
-import spiketorch
+
+import spiketorch.groups as groups
+import spiketorch.synapses as synapses
 
 
 class Network:
 	'''
 	Combines neuron groups and synapses into a spiking neural network.
 	'''
-	def __init__(self):
+	def __init__(self, dt):
+		self.dt = dt
 		self.groups = {}
 		self.synapses = {}
 
@@ -44,24 +47,24 @@ class Network:
 		# Record spikes from each population over the iteration.
 		spikes = {}
 		for key in self.groups:
-			spikes[key] = torch.zeros(time, self.groups[key].n)
+			spikes[key] = torch.zeros(int(time / self.dt), self.groups[key].n)
 
 		# Get inputs to all neuron groups from their parent neuron groups.
 		inpts.update(self.get_inputs())
 		
 		# Simulate neuron and synapse activity for `time` timesteps.
-		for timestep in range(time):
+		for timestep in range(int(time / self.dt)):
 			# Update each group in turn.
 			for key in self.groups:
-				if type(self.groups[key]) == spiketorch.groups.InputGroup:
-					self.groups[key].step(inpts[key][timestep, :], mode)
+				if type(self.groups[key]) == groups.InputGroup:
+					self.groups[key].step(inpts[key][timestep, :], mode, self.dt)
 
-				# Record spikes from this population at this timestep.
-				spikes[key][timestep, :] = self.groups[key].s
+					# Record spikes from this population at this timestep.
+					spikes[key][timestep, :] = self.groups[key].s
 			
 			for key in self.groups:
-				if type(self.groups[key]) != spiketorch.groups.InputGroup:
-					self.groups[key].step(inpts[key], mode)
+				if type(self.groups[key]) != groups.InputGroup:
+					self.groups[key].step(inpts[key], mode, self.dt)
 
 					# Record spikes from this population at this timestep.
 					spikes[key][timestep, :] = self.groups[key].s
@@ -69,7 +72,7 @@ class Network:
 			# Update synapse weights if we're in training mode.
 			if mode == 'train':
 				for synapse in self.synapses:
-					if type(self.synapses[synapse]) == spiketorch.synapses.STDPSynapses:
+					if type(self.synapses[synapse]) == synapses.STDPSynapses:
 						self.synapses[synapse].update()
 
 			# Get inputs to all neuron groups from their parent neuron groups.
@@ -78,7 +81,7 @@ class Network:
 		# Normalize synapse weights if we're in training mode.
 		if mode == 'train':
 			for synapse in self.synapses:
-				if type(self.synapses[synapse]) == spiketorch.synapses.STDPSynapses:
+				if type(self.synapses[synapse]) == synapses.STDPSynapses:
 					self.synapses[synapse].normalize()
 
 		return spikes

@@ -29,14 +29,14 @@ class InputGroup(Group):
 			self.x = torch.zeros(n)  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
-	def step(self, inpts, mode):
+	def step(self, inpts, mode, dt):
 		'''
 		On each simulation step, set the spikes of the
 		population equal to the inputs.
 		'''
 		if mode == 'train':
 			# Decay spike traces.
-			self.x -= self.trace_tc * self.x
+			self.x -= dt * self.trace_tc * self.x
 
 		self.s = inpts
 
@@ -80,15 +80,14 @@ class LIFGroup(Group):
 		if self.refractory > 0:
 			self.refrac_count = torch.zeros(n)  # Refractory period counters.
 
-
-	def step(self, inpts, mode):
+	def step(self, inpts, mode, dt):
 		if mode == 'train':
 			# Decay spike traces.
-			self.x -= self.trace_tc * self.x
+			self.x -= dt * self.trace_tc * self.x
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
-			self.refrac_count[self.refrac_count != 0] -= 1
+			self.refrac_count[self.refrac_count != 0] -= 1 * dt
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold) * (self.refrac_count == 0)
@@ -103,7 +102,7 @@ class LIFGroup(Group):
 		for key in inpts:
 			self.v += inpts[key]
 
-		self.v -= self.voltage_decay * (self.v - self.rest)
+		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
 		if mode == 'train':
 			# Setting synaptic traces.
@@ -148,14 +147,14 @@ class AdaptiveLIFGroup(Group):
 		if self.refractory > 0:
 			self.refrac_count = torch.zeros(n)  # Refractory period counters.
 
-	def step(self, inpts, mode):
+	def step(self, inpts, mode, dt):
 		if mode == 'train':
 			# Decay spike traces.
-			self.x -= self.trace_tc * self.x
+			self.x -= dt * self.trace_tc * self.x
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
-			self.refrac_count[self.refrac_count != 0] -= 1
+			self.refrac_count[self.refrac_count != 0] -= 1 * dt
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold + self.theta) * (self.refrac_count == 0)
@@ -171,7 +170,7 @@ class AdaptiveLIFGroup(Group):
 			self.v += inpts[key]
 
 		# Decay voltages.
-		self.v -= self.voltage_decay * (self.v - self.rest)
+		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
 		# Update adaptive thresholds.
 		self.theta[self.s] += self.theta_plus

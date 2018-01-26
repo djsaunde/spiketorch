@@ -14,6 +14,12 @@ class Synapses:
 		else:
 			self.w = w
 
+	def get_weights(self):
+		return self.w
+
+	def set_weights(self, w):
+		self.w = w
+
 
 class STDPSynapses:
 	'''
@@ -32,6 +38,24 @@ class STDPSynapses:
 		self.nu_post = nu_post
 		self.wmax = wmax
 		self.norm = norm
+
+	def get_weights(self):
+		return self.w
+
+	def set_weights(self, w):
+		self.w = w
+
+	def get_source(self):
+		return self.source
+
+	def set_source(self, source):
+		self.source = source
+
+	def get_target(self):
+		return self.target
+
+	def set_target(self, target):
+		self.target = target
 
 	def normalize(self):
 		'''

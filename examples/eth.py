@@ -106,6 +106,7 @@ parser.add_argument('--time', type=int, default=350)
 parser.add_argument('--rest', type=int, default=150)
 parser.add_argument('--trace_tc', type=int, default=5e-2)
 parser.add_argument('--wmax', type=float, default=1.0)
+parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--gpu', type=str, default='False')
 parser.add_argument('--plot', type=str, default='False')
 
@@ -138,7 +139,7 @@ traces = mode == 'train'
 fname = '_'.join([ str(n_neurons), str(n_train), str(seed), str(c_inhib), str(c_excite), str(wmax) ])
 
 # Initialize the spiking neural network.
-network = Network()
+network = Network(dt=dt)
 
 # Add neuron populations.
 network.add_group(InputGroup(n_input, traces=traces), 'X')
@@ -269,7 +270,7 @@ for idx in range(n_samples):
 	inpts = {}
 
 	# Encode current input example as Poisson spike trains.
-	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity, image_time))
+	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt)))
 
 	# Run network on Poisson-encoded image data.
 	spikes = network.run(mode, inpts, image_time)
@@ -278,7 +279,7 @@ for idx in range(n_samples):
 	n_retries = 0
 	while torch.sum(spikes['Ae']) < 5 and n_retries < 3:
 		intensity += 1; n_retries += 1
-		inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity, image_time))
+		inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, image_time))
 		spikes = network.run(mode=mode, inpts=inpts, time=image_time)
 
 	# Reset input intensity after any retries.
