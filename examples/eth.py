@@ -3,6 +3,7 @@ import sys
 import time
 import torch
 import timeit
+import logging
 import argparse
 import numpy as np
 import pickle as p
@@ -20,13 +21,14 @@ from spiketorch.network import *
 
 model_name = 'eth'
 
+logs_path = os.path.join('..', 'logs', model_name)
 data_path = os.path.join('..', 'data', model_name)
 params_path = os.path.join('..', 'params', model_name)
-assign_path = os.path.join('..', 'assignments', model_name)
 results_path = os.path.join('..', 'results', model_name)
-performance_path = os.path.join('..', 'performances', model_name)
+assign_path = os.path.join('..', 'assignments', model_name)
+perform_path = os.path.join('..', 'performances', model_name)
 
-for path in [params_path, assign_path, results_path, performance_path]:
+for path in [logs_path, params_path, assign_path, results_path, perform_path]:
 	if not os.path.isdir(path):
 		os.makedirs(path)
 
@@ -115,13 +117,6 @@ args = parser.parse_args()
 args = vars(args)
 locals().update(args)
 
-# Print out argument values.
-print('\nOptional argument values:')
-for key, value in args.items():
-	print('-', key, ':', value)
-
-print('\n')
-
 # Convert string arguments into boolean datatype.
 plot = plot == 'True'
 gpu = gpu == 'True'
@@ -137,6 +132,19 @@ traces = mode == 'train'
 
 # Build filename from command-line arguments.
 fname = '_'.join([ str(n_neurons), str(n_train), str(seed), str(c_inhib), str(c_excite), str(wmax) ])
+
+# Set logging configuration.
+logging.basicConfig(format='%(message)s', 
+					filename=os.path.join(logs_path, '%s.log' % fname),
+					level=logging.DEBUG,
+					filemode='w')
+
+# Log argument values.
+print('\nOptional argument values:')
+for key, value in args.items():
+	print('-', key, ':', value)
+
+print('\n')
 
 # Initialize the spiking neural network.
 network = Network(dt=dt)
@@ -225,11 +233,12 @@ for idx in range(n_samples):
 			assign_labels(y[(idx % n_images) - update_interval : idx % n_images], spike_monitor, rates, assignments)
 
 			# Assess performance of network on last `update_interval` examples.
-			print()
+			logging.info('\n')
 			for scheme in performances.keys():
 				performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
 				correct[scheme] = 0  # Reset number of correct examples.
-				print(scheme, ':', performances[scheme])
+				logging.info('%s -> (current) : %.4f | (best) : %.4f | (average) : %.4f' % (scheme,
+					performances[scheme][-1], max(performances[scheme]), np.mean(performances[scheme])))
 
 				# Save best accuracy.
 				if performances[scheme][-1] > best_accuracy:
@@ -254,16 +263,16 @@ for idx in range(n_samples):
 						save_assignments(model_name, assignments.numpy(), fname)
 
 			# Save sequence of performance estimates to file.
-			p.dump(performances, open(os.path.join(performance_path, fname), 'wb'))
+			p.dump(performances, open(os.path.join(perform_path, fname), 'wb'))
 
-			print()
+			logging.info('\n')
 
-	# Print progress through dataset.
+	# logging.info progress through dataset.
 	if idx % 10 == 0:
 		if mode == 'train':
-			print('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
+			logging.info('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
 		elif mode == 'test':
-			print('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, timeit.default_timer() - start))
+			logging.info('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, timeit.default_timer() - start))
 
 		start = timeit.default_timer()
 
@@ -404,10 +413,10 @@ results = {}
 for scheme in voting_schemes:
 	if mode == 'train':
 		results[scheme] = 100 * total_correct[scheme] / n_train
-		print('Training accuracy for voting scheme %s:' % scheme, results[scheme])
+		logging.info('Training accuracy for voting scheme %s:' % scheme, results[scheme])
 	elif mode == 'test':
 		results[scheme] = 100 * total_correct[scheme] / n_test
-		print('Test accuracy for voting scheme %s:' % scheme, results[scheme])
+		logging.info('Test accuracy for voting scheme %s:' % scheme, results[scheme])
 
 # Save out network parameters and assignments for the test phase.
 if mode == 'train':
@@ -430,5 +439,3 @@ if mode == 'test':
 		all_results = pd.read_csv(os.path.join(results_path, results_fname))
 		all_results = pd.concat([all_results, results], ignore_index=True)
 		all_results.to_csv(os.path.join(results_path, results_fname), index=False)
-
-print()
