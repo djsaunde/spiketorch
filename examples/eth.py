@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from struct import unpack
+from datetime import datetime
 from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -227,13 +228,21 @@ intensity = 1
 for idx in range(n_samples):
 	image, target = X[idx % n_images], y[idx % n_images]
 
+	if idx % 10 == 0:
+		# Log progress through dataset.
+		if mode == 'train':
+			logging.info('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
+		elif mode == 'test':
+			logging.info('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, timeit.default_timer() - start))
+
+		logging.info('\n')
+
 	if mode == 'train':
 		if idx > 0 and idx % update_interval == 0:
 			# Assign labels to neurons based on network spiking activity.
 			assign_labels(y[(idx % n_images) - update_interval : idx % n_images], spike_monitor, rates, assignments)
 
 			# Assess performance of network on last `update_interval` examples.
-			logging.info('\n')
 			for scheme in performances.keys():
 				performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
 				correct[scheme] = 0  # Reset number of correct examples.
@@ -266,15 +275,6 @@ for idx in range(n_samples):
 			p.dump(performances, open(os.path.join(perform_path, fname), 'wb'))
 
 			logging.info('\n')
-
-	# logging.info progress through dataset.
-	if idx % 10 == 0:
-		if mode == 'train':
-			logging.info('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
-		elif mode == 'test':
-			logging.info('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, timeit.default_timer() - start))
-
-		start = timeit.default_timer()
 
 	inpts = {}
 
@@ -409,14 +409,20 @@ for idx in range(n_samples):
 		
 		plt.pause(1e-8)
 
+
+if mode == 'train':
+	logging.info('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (n_train, n_train, timeit.default_timer() - start))
+elif mode == 'test':
+	logging.info('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (n_test, n_test, timeit.default_timer() - start))
+
 results = {}
 for scheme in voting_schemes:
 	if mode == 'train':
 		results[scheme] = 100 * total_correct[scheme] / n_train
-		logging.info('Training accuracy for voting scheme %s:' % scheme, results[scheme])
+		logging.info('Training accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
 	elif mode == 'test':
 		results[scheme] = 100 * total_correct[scheme] / n_test
-		logging.info('Test accuracy for voting scheme %s:' % scheme, results[scheme])
+		logging.info('Test accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
 
 # Save out network parameters and assignments for the test phase.
 if mode == 'train':
@@ -430,9 +436,9 @@ if mode == 'train':
 		save_assignments(model_name, assignments.numpy(), fname)
 
 if mode == 'test':
-	results = pd.DataFrame([[fname] + list(results.values())], columns=['Parameters'] + list(results.keys()))
-
+	results = pd.DataFrame([[datetime.now(), fname] + list(results.values())], columns=['date', 'parameters'] + list(results.keys()))
 	results_fname = '_'.join([str(n_neurons), str(n_train), 'results.csv'])
+	
 	if not results_fname in os.listdir(results_path):
 		results.to_csv(os.path.join(results_path, results_fname), index=False)
 	else:
