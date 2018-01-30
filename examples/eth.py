@@ -16,9 +16,10 @@ from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from spiketorch.util import *
-from spiketorch.groups import *
-from spiketorch.synapses import *
-from spiketorch.network import *
+from spiketorch.network import Network
+from spiketorch.monitors import Monitor
+from spiketorch.synapses import Synapses, STDPSynapses
+from spiketorch.groups import InputGroup, LIFGroup, AdaptiveLIFGroup
 
 model_name = 'eth'
 
@@ -177,6 +178,9 @@ network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=c_in
 							torch.ones([n_neurons, n_neurons]) - torch.diag(c_inhib \
 											* torch.ones(n_neurons))), name=('Ai', 'Ae'))
 
+network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
+network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
+
 # Get training, test data from disk.
 if mode == 'train':
 	data = get_labeled_data('train', train=True)
@@ -288,7 +292,7 @@ for idx in range(n_samples):
 	n_retries = 0
 	while torch.sum(spikes['Ae']) < 5 and n_retries < 3:
 		intensity += 1; n_retries += 1
-		inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, image_time))
+		inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt)))
 		spikes = network.run(mode=mode, inpts=inpts, time=image_time)
 
 	# Reset input intensity after any retries.
@@ -313,18 +317,20 @@ for idx in range(n_samples):
 	if plot:
 		if gpu:
 			inpt = inpts['X'].cpu().numpy()
-			Ae_spikes = spikes['Ae'].cpu().numpy()
-			Ai_spikes = spikes['Ai'].cpu().numpy()
+			Ae_spikes = spikes['Ae'].cpu().numpy(); Ai_spikes = spikes['Ai'].cpu().numpy()
 			input_exc_weights = network.synapses[('X', 'Ae')].w.cpu().numpy()
 			asgnmts = assignments.cpu().numpy()
-			Ae_voltages = network.groups['Ae'].get_voltages().cpu().numpy()
+			exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').cpu().numpy()
+			exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').cpu().numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
+			inh_voltages = network.monitors[('Ai', 'v')].get('v').cpu().numpy(); network.monitors[('Ai', 'v')].reset()
 		else:
 			inpt = inpts['X'].numpy()
-			Ae_spikes = spikes['Ae'].numpy()
-			Ai_spikes = spikes['Ai'].numpy()
+			Ae_spikes = spikes['Ae'].numpy(); Ai_spikes = spikes['Ai'].numpy()
 			input_exc_weights = network.synapses[('X', 'Ae')].w.numpy()
 			asgnmts = assignments.numpy()
-			Ae_voltages = network.groups['Ae'].get_voltages().numpy()
+			exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
+			exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
+			inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
 			
 		if idx == 0:
 			# Create figure for input image and corresponding spike trains.
@@ -371,14 +377,20 @@ for idx in range(n_samples):
 
 			# Create figure to display plots of training accuracy over time.
 			if mode == 'train':
-				perf_figure, ax11 = plt.subplots()
+				perf_figure, ax7 = plt.subplots()
 				for scheme in voting_schemes:
-					ax11.plot(range(len(performances[scheme])), performances[scheme], label=scheme)
+					ax7.plot(range(len(performances[scheme])), performances[scheme], label=scheme)
 
-				ax11.set_xlim([0, n_train / update_interval + 1])
-				ax11.set_ylim([0, 1])
-				ax11.set_title('Network performance')
-				ax11.legend()
+				ax7.set_xlim([0, n_train / update_interval + 1])
+				ax7.set_ylim([0, 1])
+				ax7.set_title('Network performance')
+				ax7.legend()
+
+			voltages_figure, [ax8, ax9, ax10] = plt.subplots(3, 1, figsize=(8, 8))
+			im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
+			ax8.set_title('Excitatory voltages'); ax9.set_title('Inhibitory voltages'); ax10.set_title('Excitatory adaptive thresholds')
+
+			plt.tight_layout()
 		else:
 			# Re-draw plotting data after each iteration.
 			im0.set_data(image.reshape(n_input_sqrt, n_input_sqrt))
@@ -395,14 +407,17 @@ for idx in range(n_samples):
 			im6.set_data(asgnmts)
 
 			if mode == 'train':
-				ax11.clear()
+				ax7.clear()
 				for scheme in voting_schemes:
-					ax11.plot(range(len(performances[scheme])), performances[scheme], label=scheme)
+					ax7.plot(range(len(performances[scheme])), performances[scheme], label=scheme)
 
-				ax11.set_xlim([0, n_train / update_interval])
-				ax11.set_ylim([0, 1])
-				ax11.set_title('Network performance')
-				ax11.legend()
+				ax7.set_xlim([0, n_train / update_interval])
+				ax7.set_ylim([0, 1])
+				ax7.set_title('Network performance')
+				ax7.legend()
+
+			ax8.clear(); ax9.clear(); ax10.clear()
+			im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
 
 			# Update title of input digit plot to reflect current iteration.
 			ax0.set_title('Original MNIST digit (Iteration %d)' % idx)

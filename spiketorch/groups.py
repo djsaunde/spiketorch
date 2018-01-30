@@ -123,7 +123,7 @@ class AdaptiveLIFGroup(Group):
 	Group of leaky integrate-and-fire neurons with adaptive thresholds.
 	'''
 	def __init__(self, n, traces=False, rest=-65.0, reset=-65.0, threshold=-52.0, refractory=5,
-							voltage_decay=1e-2, theta_plus=0.1, theta_decay=1e-7, trace_tc=5e-2):
+							voltage_decay=1e-2, theta_plus=0.05, theta_decay=1e-7, trace_tc=5e-2):
 		
 		super().__init__()
 
@@ -172,10 +172,11 @@ class AdaptiveLIFGroup(Group):
 		# Decay voltages.
 		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
-		# Update adaptive thresholds.
-		self.theta[self.s] += self.theta_plus
-
 		if mode == 'train':
+			# Update adaptive thresholds.
+			self.theta[self.s] += self.theta_plus
+			self.theta -= dt * self.theta_decay * self.theta
+
 			# Setting synaptic traces.
 			self.x[self.s.byte()] = 1.0
 

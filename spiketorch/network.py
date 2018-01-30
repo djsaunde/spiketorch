@@ -12,12 +12,16 @@ class Network:
 		self.dt = dt
 		self.groups = {}
 		self.synapses = {}
+		self.monitors = {}
 
 	def add_group(self, group, name):
 		self.groups[name] = group
 
 	def add_synapses(self, synapses, name):
 		self.synapses[name] = synapses
+
+	def add_monitor(self, monitor, name):
+		self.monitors[name] = monitor
 
 	def get_inputs(self):
 		inpts = {}
@@ -77,6 +81,9 @@ class Network:
 
 			# Get inputs to all neuron groups from their parent neuron groups.
 			inpts.update(self.get_inputs())
+
+			for monitor in self.monitors:
+				self.monitors[monitor].record()
 
 		# Normalize synapse weights if we're in training mode.
 		if mode == 'train':
