@@ -105,7 +105,7 @@ parser.add_argument('--update_interval', type=int, default=250)
 parser.add_argument('--nu_pre', type=float, default=1e-4)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--c_excite', type=float, default=22.5)
-parser.add_argument('--c_inhib', type=float, default=-17.5)
+parser.add_argument('--c_inhib', type=float, default=17.5)
 parser.add_argument('--time', type=int, default=350)
 parser.add_argument('--rest', type=int, default=150)
 parser.add_argument('--trace_tc', type=int, default=5e-2)
@@ -174,9 +174,9 @@ elif mode == 'test':
 
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
 					w=torch.diag(c_excite * torch.ones(n_neurons))), name=('Ae', 'Ai'))
-network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=c_inhib * \
-							torch.ones([n_neurons, n_neurons]) - torch.diag(c_inhib \
-											* torch.ones(n_neurons))), name=('Ai', 'Ae'))
+network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_inhib * \
+									(torch.ones([n_neurons, n_neurons]) - torch.diag(1 \
+											* torch.ones(n_neurons)))), name=('Ai', 'Ae'))
 
 network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
 network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
