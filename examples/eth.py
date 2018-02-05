@@ -178,8 +178,8 @@ network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_i
 									(torch.ones([n_neurons, n_neurons]) - torch.diag(1 \
 											* torch.ones(n_neurons)))), name=('Ai', 'Ae'))
 
-network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
-network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
+# network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
+# network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
 
 # Get training, test data from disk.
 if mode == 'train':
@@ -244,7 +244,7 @@ for idx in range(n_samples):
 	if mode == 'train':
 		if idx > 0 and idx % update_interval == 0:
 			# Assign labels to neurons based on network spiking activity.
-			assign_labels(y[(idx % n_images) - update_interval : idx % n_images], spike_monitor, rates, assignments)
+			rates, assignments = assign_labels(y[(idx % n_images) - update_interval : idx % n_images], spike_monitor, rates, assignments)
 
 			# Assess performance of network on last `update_interval` examples.
 			for scheme in performances.keys():
@@ -320,17 +320,17 @@ for idx in range(n_samples):
 			Ae_spikes = spikes['Ae'].cpu().numpy(); Ai_spikes = spikes['Ai'].cpu().numpy()
 			input_exc_weights = network.synapses[('X', 'Ae')].w.cpu().numpy()
 			asgnmts = assignments.cpu().numpy()
-			exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').cpu().numpy()
-			exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').cpu().numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
-			inh_voltages = network.monitors[('Ai', 'v')].get('v').cpu().numpy(); network.monitors[('Ai', 'v')].reset()
+			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').cpu().numpy()
+			# exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').cpu().numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
+			# inh_voltages = network.monitors[('Ai', 'v')].get('v').cpu().numpy(); network.monitors[('Ai', 'v')].reset()
 		else:
 			inpt = inpts['X'].numpy()
 			Ae_spikes = spikes['Ae'].numpy(); Ai_spikes = spikes['Ai'].numpy()
 			input_exc_weights = network.synapses[('X', 'Ae')].w.numpy()
 			asgnmts = assignments.numpy()
-			exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
-			exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
-			inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
+			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
+			# exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
+			# inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
 			
 		if idx == 0:
 			# Create figure for input image and corresponding spike trains.
@@ -386,11 +386,11 @@ for idx in range(n_samples):
 				ax7.set_title('Network performance')
 				ax7.legend()
 
-			voltages_figure, [ax8, ax9, ax10] = plt.subplots(3, 1, figsize=(8, 8))
-			im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
-			ax8.set_title('Excitatory voltages'); ax9.set_title('Inhibitory voltages'); ax10.set_title('Excitatory adaptive thresholds')
+			# voltages_figure, [ax8, ax9, ax10] = plt.subplots(3, 1, figsize=(8, 8))
+			# im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
+			# ax8.set_title('Excitatory voltages'); ax9.set_title('Inhibitory voltages'); ax10.set_title('Excitatory adaptive thresholds')
 
-			plt.tight_layout()
+			# plt.tight_layout()
 		else:
 			# Re-draw plotting data after each iteration.
 			im0.set_data(image.reshape(n_input_sqrt, n_input_sqrt))
@@ -416,8 +416,8 @@ for idx in range(n_samples):
 				ax7.set_title('Network performance')
 				ax7.legend()
 
-			ax8.clear(); ax9.clear(); ax10.clear()
-			im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
+			# ax8.clear(); ax9.clear(); ax10.clear()
+			# im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
 
 			# Update title of input digit plot to reflect current iteration.
 			ax0.set_title('Original MNIST digit (Iteration %d)' % idx)

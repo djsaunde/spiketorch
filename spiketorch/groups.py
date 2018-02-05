@@ -159,6 +159,11 @@ class AdaptiveLIFGroup(Group):
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold + self.theta) * (self.refrac_count == 0)
 
+		if torch.sum(self.s) > 0:
+			s = torch.zeros(self.s.size())
+			s[torch.multinomial(self.s.float(), 1)] = 1
+			self.s = s.byte()
+
 		# Reset refractory periods for spiked neurons.
 		self.refrac_count[self.s] = self.refractory
 
