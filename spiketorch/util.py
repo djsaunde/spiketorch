@@ -3,6 +3,7 @@ import sys
 import torch
 import numpy as np
 import pickle as p
+
 from struct import unpack
 
 data_path = os.path.join('..', 'data')
@@ -102,7 +103,41 @@ def generate_spike_train(image, intensity, time):
 	return spikes
 
 
-def save_params(params, fname):
+def generate_2d_spike_train(image, intensity, time):
+	'''
+	Generates Poisson spike trains based on image ink intensity.
+	'''
+	# Multiply image by desired intensity.
+	image = image * intensity
+
+	# Get number of input neurons.
+	n_input = image.shape[0]
+	n_input_sqrt = int(np.sqrt(n_input))
+	
+	# Image data preprocessing (divide by 4, invert (for spike rates),
+	# multiply by 1000 (conversion from milliseconds to seconds).
+	image = (1 / (image / 4)) * 1000
+	image[np.isinf(image)] = 0
+	
+	# Make the spike data.
+	spike_times = np.random.poisson(image, [time, n_input])
+	spike_times = np.cumsum(spike_times, axis=0)
+	spike_times[spike_times >= time] = 0
+
+	# Create spikes matrix from spike times.
+	spikes = np.zeros([time, n_input])
+	for idx in range(time):
+		spikes[spike_times[idx, :], np.arange(n_input)] = 1
+
+	# Temporary fix: The above code forces a spike from
+	# every input neuron on the first time step.
+	spikes[0, :] = 0
+
+	# Return the input spike occurrence matrix.
+	return spikes.reshape([time, 1, n_input_sqrt, n_input_sqrt])
+
+
+def save_params(model_name, params, fname, prefix):
 	'''
 	Save network params to disk.
 
@@ -110,23 +145,24 @@ def save_params(params, fname):
 		- params (numpy.ndarray): Array of params to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(params_path, fname), params)
+	np.save(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'), params)
 
 
-def load_params(fname):
+def load_params(model_name, fname, prefix):
 	'''
 	Load network params from disk.
 
 	Arguments:
 		- fname (str): File name of file to read from.
+		- prefix (str): Name of the parameters to read from disk.
 
 	Returns:
 		- params (numpy.ndarray): Params stored in file `fname`.
 	'''
-	return np.load(os.path.join(params_path, fname))
+	return np.load(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'))
 
 
-def save_assignments(assignments, fname):
+def save_assignments(model_name, assignments, fname):
 	'''
 	Save network assignments to disk.
 
@@ -134,10 +170,10 @@ def save_assignments(assignments, fname):
 		- assignments (numpy.ndarray): Array of assignments to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(assign_path, fname), assignments)
+	np.save(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'), assignments)
 
 
-def load_assignments(fname):
+def load_assignments(model_name, fname):
 	'''
 	Save network assignments to disk.
 
@@ -147,7 +183,7 @@ def load_assignments(fname):
 	Returns:
 		- assignments (numpy.ndarray): Assignments stored in file `fname`.
 	'''
-	return np.load(os.path.join(assign_path, fname))
+	return np.load(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'))
 
 
 def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
@@ -166,3 +202,27 @@ def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
 						filtr.reshape([n_input_sqrt, n_input_sqrt])
 	
 	return square_weights
+
+
+def get_conv_weights(weights, kernel_size, stride, n_patches, n_patch_neurons):
+	n_patches_sqrt = int(np.sqrt(n_patches))
+	n_patch_neurons_sqrt = int(np.sqrt(n_patch_neurons))
+
+	rearranged = np.zeros([kernel_size * n_patch_neurons, kernel_size * n_patches])
+
+	for patch in range(n_patches):
+		for neuron in range(n_patch_neurons):
+			rearranged[kernel_size * neuron : kernel_size * (neuron + 1), kernel_size * patch : kernel_size * (patch + 1)] = weights[patch]
+
+	return rearranged.T
+
+
+def get_convolution_locations(neuron, n_patch_neurons_sqrt, n_input_sqrt, kernel_size, stride):
+	convolution_locations = [0] * (n_input_sqrt ** 2)
+
+	for x in range(kernel_size):
+		for y in range(kernel_size):
+			convolution_locations[(((neuron % n_patch_neurons_sqrt) * stride + (neuron // \
+				n_patch_neurons_sqrt) * n_input_sqrt * stride) + (x * n_input_sqrt) + y)] = 1
+
+	return convolution_locations

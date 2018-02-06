@@ -12,7 +12,6 @@ n_neurons=${2:-100}
 n_train=${3:-60000}
 
 source activate py36
-
-python eth.py --mode train --seed $seed --n_neurons $n_neurons --n_train $n_train
+cd ../examples/
 
 python eth.py --mode test --seed $seed --n_neurons $n_neurons --n_train $n_train

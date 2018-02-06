@@ -4,13 +4,18 @@
 # MNIST dataset.
 *-ubyte
 
-# Parameters, assignments, and results.
+# Parameters, assignments, results, performances, logs.
 params/
 assignments/
 results/
+performances/
+logs/
 
 # PyCache (whatever that is!)
-code/__pycache__
+spiketorch/__pycache__
 
 # Job reports (from HPC experiments)
 job_reports/
+
+# IPython notebook checkpoints
+*.ipynb_checkpoints
