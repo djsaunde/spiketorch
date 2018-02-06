@@ -81,13 +81,17 @@ class LIFGroup(Group):
 			self.refrac_count = torch.zeros(n)  # Refractory period counters.
 
 	def step(self, inpts, mode, dt):
+		# Decay voltages.
+		self.v -= dt * self.voltage_decay * (self.v - self.rest)
+
 		if mode == 'train':
-			# Decay spike traces.
+			# Decay spike traces and adaptive thresholds.
 			self.x -= dt * self.trace_tc * self.x
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
 			self.refrac_count[self.refrac_count != 0] -= 1 * dt
+			self.refrac_count = torch.max(self.refrac_count, torch.zeros(self.n))
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold) * (self.refrac_count == 0)
@@ -101,8 +105,6 @@ class LIFGroup(Group):
 		# Integrate input and decay voltages.
 		for key in inpts:
 			self.v += inpts[key]
-
-		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
 		if mode == 'train':
 			# Setting synaptic traces.
@@ -148,41 +150,37 @@ class AdaptiveLIFGroup(Group):
 			self.refrac_count = torch.zeros(n)  # Refractory period counters.
 
 	def step(self, inpts, mode, dt):
+		# Decay voltages.
+		self.v -= dt * self.voltage_decay * (self.v - self.rest)
+
 		if mode == 'train':
-			# Decay spike traces.
+			# Decay spike traces and adaptive thresholds.
 			self.x -= dt * self.trace_tc * self.x
+			self.theta -= dt * self.theta_decay * self.theta
 
 		if self.refractory > 0:
 			# Decrement refractory counters.
 			self.refrac_count[self.refrac_count != 0] -= 1 * dt
+			self.refrac_count = torch.max(self.refrac_count, torch.zeros(self.n))
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold + self.theta) * (self.refrac_count == 0)
+		self.refrac_count[self.s] = self.refractory
+		self.v[self.s] = self.reset
 
+		# Choose only a single neuron to spike (ETH replication).
 		if torch.sum(self.s) > 0:
 			s = torch.zeros(self.s.size())
 			s[torch.multinomial(self.s.float(), 1)] = 1
 			self.s = s.byte()
 
-		# Reset refractory periods for spiked neurons.
-		self.refrac_count[self.s] = self.refractory
-
-		# Reset neurons above their threshold voltage.
-		self.v[self.s] = self.reset
-
 		# Integrate inputs.
 		for key in inpts:
 			self.v += inpts[key]
 
-		# Decay voltages.
-		self.v -= dt * self.voltage_decay * (self.v - self.rest)
-
 		if mode == 'train':
-			# Update adaptive thresholds.
+			# Update adaptive thresholds, synaptic traces.
 			self.theta[self.s] += self.theta_plus
-			self.theta -= dt * self.theta_decay * self.theta
-
-			# Setting synaptic traces.
 			self.x[self.s.byte()] = 1.0
 
 	def get_spikes(self):

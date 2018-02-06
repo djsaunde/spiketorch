@@ -202,9 +202,16 @@ rest_time = rest
 
 # Voting schemes and neuron label assignments.
 voting_schemes = ['all']
-assignments = -1 * torch.ones(n_neurons)
 rates = torch.zeros(n_neurons, 10)
 performances = { scheme : [] for scheme in voting_schemes }
+
+if mode == 'train':
+	assignments = -1 * torch.ones(n_neurons)
+elif mode == 'test':
+	if gpu:
+		assignments = torch.from_numpy(load_assignments(model_name, fname)).cuda()
+	else:
+		assignments = torch.from_numpy(load_assignments(model_name, fname))
 
 # Keep track of correct classifications for performance monitoring.
 correct = { scheme : 0 for scheme in voting_schemes }
@@ -380,12 +387,12 @@ for idx in range(n_samples):
 				for scheme in voting_schemes:
 					ax7.plot(range(len(performances[scheme])), [100 * p for p in performances[scheme]], label=scheme)
 
-				ax7.set_xlim([0, n_train])
 				ax7.set_ylim([0, 100])
 				ax7.set_title('Estimated classification accuracy')
 				ax7.set_xlabel('No. of examples')
 				ax7.set_ylabel('Accuracy')
-				ax7.set_xticks(range(0, n_train + 1000, 1000))
+				ax7.set_xticks(range(0, int(n_train / update_interval) + 1, 4), range(0, n_train + 1000, 1000))
+				ax7.set_xticklabels(range(0, n_train + 1000, 1000))
 				ax7.legend()
 
 			# voltages_figure, [ax8, ax9, ax10] = plt.subplots(3, 1, figsize=(8, 8))
@@ -411,14 +418,14 @@ for idx in range(n_samples):
 			if mode == 'train':
 				ax7.clear()
 				for scheme in voting_schemes:
-					ax7.plot(range(len(performances[scheme])), performances[scheme], label=scheme)
+					ax7.plot(range(len(performances[scheme])), [100 * p for p in performances[scheme]], label=scheme)
 
-				ax7.set_xlim([0, n_train])
 				ax7.set_ylim([0, 100])
 				ax7.set_title('Estimated classification accuracy')
 				ax7.set_xlabel('No. of examples')
 				ax7.set_ylabel('Accuracy')
-				ax7.set_xticks(range(0, n_train + 1000, 1000))
+				ax7.set_xticks(range(0, int(n_train / update_interval) + 1, 4))
+				ax7.set_xticklabels(range(0, n_train + 1000, 1000))
 				ax7.legend()
 
 			# ax8.clear(); ax9.clear(); ax10.clear()

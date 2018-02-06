@@ -209,13 +209,15 @@ class conv_ETH:
 			self.v['Ae'][self.s['Ae']] = self.reset['Ae']
 			self.v['Ai'][self.s['Ai']] = self.reset['Ai']
 
-			expanded_input = self.s['X'].view(1, 1, self.n_input_sqrt, self.n_input_sqrt).expand(self.n_patches, 1, self.n_input_sqrt, self.n_input_sqrt).float()
+			conv_input = self.s['X'].view(1, 1, self.n_input_sqrt,
+							self.n_input_sqrt).expand(self.n_patches, 1,
+							self.n_input_sqrt, self.n_input_sqrt).float()
 
 			# Calculate input to excitatory layer contribution.
-			conv_input = conv2d(Variable(expanded_input), Variable(self.W['X_Ae']), stride=self.stride).sum(1).view(-1).data
+			conv = conv2d(Variable(conv_input), Variable(self.W['X_Ae']), stride=self.stride).sum(1).view(-1).data
 
 			# Integrate input and decay voltages.
-			self.v['Ae'] += conv_input - self.s['Ai'].float() @ self.W['Ai_Ae']
+			self.v['Ae'] += conv - self.s['Ai'].float() @ self.W['Ai_Ae']
 			self.v['Ae'] -= self.v_decay['Ae'] * (self.v['Ae'] - self.rest['Ae'])
 			self.v['Ai'] += self.s['Ae'].float() @ self.W['Ae_Ai']
 			self.v['Ai'] -= self.v_decay['Ai'] * (self.v['Ai'] - self.rest['Ai'])
@@ -225,19 +227,31 @@ class conv_ETH:
 				self.a['X'][self.s['X'].byte()] = 1.0
 				self.a['Ae'][self.s['Ae'].byte()] = 1.0
 
-				# Perform STDP weight update.
+				conv_trace = self.a['X'].view(1, 1, self.n_input_sqrt,
+							self.n_input_sqrt).expand(self.n_patches, 1,
+							self.n_input_sqrt, self.n_input_sqrt).float()
+
+				ones = torch.ones(1, n_patches, 4, 4)
+
+				# Post-synaptic.
 				start = timeit.default_timer()
-				for neuron in range(self.n_neurons):
-					visual_field = neuron // self.n_patches
-					patch = neuron // self.n_patch_neurons
+				conv = conv2d(Variable(conv_trace), Variable(ones), stride=self.stride).sum(1, keepdim=True).data
+				print(conv.size(), self.W['X_Ae'].size())
+				self.W['X_Ae'] += self.lrs['nu_post'] * conv
 
-					# Post-synaptic.				
-					self.W['X_Ae'][patch] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input,
-											1)[self.conv_locations[visual_field]] * self.s['Ae'][neuron])
+				# # Perform STDP weight update.
+				# start = timeit.default_timer()
+				# for neuron in range(self.n_neurons):
+				# 	visual_field = neuron // self.n_patches
+				# 	patch = neuron // self.n_patch_neurons
 
-					# Pre-synaptic.
-					self.W['X_Ae'][patch] -= self.lrs['nu_pre'] * (self.s['X'].float().view(self.n_input,
-													1)[self.conv_locations[visual_field]] * self.a['Ae'][neuron])
+				# 	# Post-synaptic.				
+				# 	self.W['X_Ae'][patch] += self.lrs['nu_post'] * (self.a['X'].view(self.n_input,
+				# 							1)[self.conv_locations[visual_field]] * self.s['Ae'][neuron])
+
+				# 	# Pre-synaptic.
+				# 	self.W['X_Ae'][patch] -= self.lrs['nu_pre'] * (self.s['X'].float().view(self.n_input,
+				# 									1)[self.conv_locations[visual_field]] * self.a['Ae'][neuron])
 				
 				print('Time: %.4f' % (timeit.default_timer() - start))
 
