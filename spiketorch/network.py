@@ -1,7 +1,7 @@
 import torch
 
-import spiketorch.groups as groups
-import spiketorch.synapses as synapses
+import groups as groups
+import synapses as synapses
 
 
 class Network:
@@ -55,7 +55,7 @@ class Network:
 
 		# Get inputs to all neuron groups from their parent neuron groups.
 		inpts.update(self.get_inputs())
-		
+
 		# Simulate neuron and synapse activity for `time` timesteps.
 		for timestep in range(int(time / self.dt)):
 			# Update each group in turn.
@@ -65,7 +65,7 @@ class Network:
 
 					# Record spikes from this population at this timestep.
 					spikes[key][timestep, :] = self.groups[key].s
-			
+
 			for key in self.groups:
 				if type(self.groups[key]) != groups.InputGroup:
 					self.groups[key].step(inpts[key], mode, self.dt)
