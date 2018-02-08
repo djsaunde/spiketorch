@@ -10,16 +10,16 @@ import pickle as p
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from struct import unpack
 from datetime import datetime
-from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from spiketorch.util import *
-from spiketorch.network import Network
-from spiketorch.monitors import Monitor
-from spiketorch.synapses import Synapses, STDPSynapses
-from spiketorch.groups import InputGroup, LIFGroup, AdaptiveLIFGroup
+sys.path.append('/mnt/d/Downloads/GIT repos/spiketorch/spiketorch/')
+from util import *
+from network import Network
+from monitors import Monitor
+from synapses import Synapses, STDPSynapses
+from groups import InputGroup, LIFGroup, AdaptiveLIFGroup
+
 
 model_name = 'eth'
 
@@ -53,7 +53,7 @@ def classify(spikes, voting_schemes, assignments):
 		if scheme == 'all':
 			for idx in range(10):
 				n_assigns = torch.nonzero(assignments == idx).numel()
-				
+
 				if n_assigns > 0:
 					idxs = torch.nonzero((assignments == idx).long().view(-1)).view(-1)
 					rates[idx] = torch.sum(spikes[idxs]) / n_assigns
@@ -86,7 +86,7 @@ def assign_labels(inputs, outputs, rates, assignments):
 			# Calculate average firing rate per neuron, per category.
 			rates[:, j] = 0.9 * rates[:, j] + torch.sum(outputs[idxs], 0) / n_inputs
 
-	# Assignments of neurons are the categories for which they fire the most. 
+	# Assignments of neurons are the categories for which they fire the most.
 	assignments = torch.max(rates, 1)[1]
 
 	return rates, assignments
@@ -112,7 +112,7 @@ parser.add_argument('--trace_tc', type=int, default=5e-2)
 parser.add_argument('--wmax', type=float, default=1.0)
 parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--gpu', type=str, default='False')
-parser.add_argument('--plot', type=str, default='False')
+parser.add_argument('--plot', type=str, default='True')
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
@@ -136,7 +136,7 @@ traces = mode == 'train'
 fname = '_'.join([ str(n_neurons), str(n_train), str(seed), str(c_inhib), str(c_excite), str(wmax) ])
 
 # Set logging configuration.
-logging.basicConfig(format='%(message)s', 
+logging.basicConfig(format='%(message)s',
 					filename=os.path.join(logs_path, '%s.log' % fname),
 					level=logging.DEBUG,
 					filemode='w')
@@ -172,7 +172,7 @@ elif mode == 'test':
 							w=torch.from_numpy(load_params(model_name, fname, 'X_Ae')),
 						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
 
-network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
+network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'],
 					w=torch.diag(c_excite * torch.ones(n_neurons))), name=('Ae', 'Ai'))
 network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_inhib * \
 									(torch.ones([n_neurons, n_neurons]) - torch.diag(1 \
@@ -330,7 +330,7 @@ for idx in range(n_samples):
 			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
 			# exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
 			# inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
-			
+
 		if idx == 0:
 			# Create figure for input image and corresponding spike trains.
 			input_figure, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(12, 6))
@@ -358,7 +358,7 @@ for idx in range(n_samples):
 
 			im5 = ax5.imshow(square_weights, cmap='hot_r', vmin=0, vmax=wmax)
 			ax5.set_title('Input to excitatory weights')
-			
+
 			color = plt.get_cmap('RdBu', 11)
 			asgnmts = asgnmts.reshape([n_neurons_sqrt, n_neurons_sqrt]).T
 			im6 = ax6.matshow(asgnmts, cmap=color, vmin=-1.5, vmax=9.5)
@@ -402,7 +402,7 @@ for idx in range(n_samples):
 			im4.set_data(Ai_spikes.T)
 
 			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
-			
+
 			im5.set_data(square_weights)
 
 			asgnmts = asgnmts.reshape([n_neurons_sqrt, n_neurons_sqrt]).T
@@ -426,7 +426,7 @@ for idx in range(n_samples):
 
 			# Update title of input digit plot to reflect current iteration.
 			ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
-		
+
 		plt.pause(1e-8)
 
 
@@ -458,7 +458,7 @@ if mode == 'train':
 if mode == 'test':
 	results = pd.DataFrame([[datetime.now(), fname] + list(results.values())], columns=['date', 'parameters'] + list(results.keys()))
 	results_fname = '_'.join([str(n_neurons), str(n_train), 'results.csv'])
-	
+
 	if not results_fname in os.listdir(results_path):
 		results.to_csv(os.path.join(results_path, results_fname), index=False)
 	else:
