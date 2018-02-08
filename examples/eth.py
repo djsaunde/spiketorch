@@ -224,7 +224,6 @@ n_neurons_sqrt = int(np.sqrt(n_neurons))
 # Run network simulation.
 plt.ion()
 start = timeit.default_timer()
-iter_start = timeit.default_timer()
 
 if mode == 'train':
 	n_samples = n_train
@@ -232,7 +231,6 @@ elif mode == 'test':
 	n_samples = n_test
 
 n_images = X.shape[0]
-
 best_accuracy = -np.inf
 
 intensity = 1
@@ -243,8 +241,10 @@ for idx in range(n_samples):
 		# Log progress through dataset.
 		if mode == 'train':
 			logging.info('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
+			print('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
 		elif mode == 'test':
 			logging.info('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, timeit.default_timer() - start))
+			print('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, timeit.default_timer() - start))
 
 	if mode == 'train':
 		if idx > 0 and idx % update_interval == 0:
@@ -252,11 +252,14 @@ for idx in range(n_samples):
 			rates, assignments = assign_labels(y[(idx % n_images) - update_interval : idx % n_images], spike_monitor, rates, assignments)
 
 			# Assess performance of network on last `update_interval` examples.
-			logging.info('\n')
+			logging.info('\n'); print()
 			for scheme in performances.keys():
 				performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
 				correct[scheme] = 0  # Reset number of correct examples.
+				
 				logging.info('%s -> (current) : %.4f | (best) : %.4f | (average) : %.4f' % (scheme,
+					performances[scheme][-1], max(performances[scheme]), np.mean(performances[scheme])))
+				print('%s -> (current) : %.4f | (best) : %.4f | (average) : %.4f' % (scheme,
 					performances[scheme][-1], max(performances[scheme]), np.mean(performances[scheme])))
 
 				# Save best accuracy.
@@ -284,7 +287,7 @@ for idx in range(n_samples):
 			# Save sequence of performance estimates to file.
 			p.dump(performances, open(os.path.join(perform_path, fname), 'wb'))
 
-			logging.info('\n')
+			logging.info('\n'); print()
 
 	inpts = {}
 
@@ -447,9 +450,11 @@ for scheme in voting_schemes:
 	if mode == 'train':
 		results[scheme] = 100 * total_correct[scheme] / n_train
 		logging.info('Training accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
+		print('Training accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
 	elif mode == 'test':
 		results[scheme] = 100 * total_correct[scheme] / n_test
 		logging.info('Test accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
+		print('Test accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
 
 # Save out network parameters and assignments for the test phase.
 if mode == 'train':

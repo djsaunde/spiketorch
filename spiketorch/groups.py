@@ -77,8 +77,7 @@ class LIFGroup(Group):
 			self.x = torch.zeros(n)  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
-		if self.refractory > 0:
-			self.refrac_count = torch.zeros(n)  # Refractory period counters.
+		self.refrac_count = torch.zeros(n)  # Refractory period counters.
 
 	def step(self, inpts, mode, dt):
 		# Decay voltages.
@@ -88,23 +87,16 @@ class LIFGroup(Group):
 			# Decay spike traces and adaptive thresholds.
 			self.x -= dt * self.trace_tc * self.x
 
-		if self.refractory > 0:
-			# Decrement refractory counters.
-			self.refrac_count[self.refrac_count != 0] -= 1 * dt
-			self.refrac_count = torch.max(self.refrac_count, torch.zeros(self.n))
+		# Decrement refractory counters.
+		self.refrac_count[self.refrac_count != 0] -= dt
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold) * (self.refrac_count == 0)
-
-		# Reset refractory periods for spiked neurons.
-		self.refrac_count[self.s] = self.refractory
-
-		# Reset neurons above their threshold voltage.
+		self.refrac_count[self.s] = dt * self.refractory
 		self.v[self.s] = self.reset
 
 		# Integrate input and decay voltages.
-		for key in inpts:
-			self.v += inpts[key]
+		self.v += sum([inpts[key] for key in inpts])
 
 		if mode == 'train':
 			# Setting synaptic traces.
@@ -146,8 +138,7 @@ class AdaptiveLIFGroup(Group):
 			self.x = torch.zeros(n)  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
-		if self.refractory > 0:
-			self.refrac_count = torch.zeros(n)  # Refractory period counters.
+		self.refrac_count = torch.zeros(n)  # Refractory period counters.
 
 	def step(self, inpts, mode, dt):
 		# Decay voltages.
@@ -158,14 +149,12 @@ class AdaptiveLIFGroup(Group):
 			self.x -= dt * self.trace_tc * self.x
 			self.theta -= dt * self.theta_decay * self.theta
 
-		if self.refractory > 0:
-			# Decrement refractory counters.
-			self.refrac_count[self.refrac_count != 0] -= 1 * dt
-			self.refrac_count = torch.max(self.refrac_count, torch.zeros(self.n))
+		# Decrement refractory counters.
+		self.refrac_count[self.refrac_count != 0] -= dt
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold + self.theta) * (self.refrac_count == 0)
-		self.refrac_count[self.s] = self.refractory
+		self.refrac_count[self.s] = dt * self.refractory
 		self.v[self.s] = self.reset
 
 		# Choose only a single neuron to spike (ETH replication).
@@ -175,13 +164,12 @@ class AdaptiveLIFGroup(Group):
 			self.s = s.byte()
 
 		# Integrate inputs.
-		for key in inpts:
-			self.v += inpts[key]
+		self.v += sum([inpts[key] for key in inpts])
 
 		if mode == 'train':
 			# Update adaptive thresholds, synaptic traces.
 			self.theta[self.s] += self.theta_plus
-			self.x[self.s.byte()] = 1.0
+			self.x[self.s] = 1.0
 
 	def get_spikes(self):
 		return self.s
