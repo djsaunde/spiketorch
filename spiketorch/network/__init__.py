@@ -56,6 +56,9 @@ class Network:
 		for key in self.groups:
 			spikes[key] = torch.zeros(int(time / self.dt), self.groups[key].n)
 
+		for monitor in self.monitors:
+			self.monitors[monitor].reset()
+
 		# Get inputs to all neuron groups from their parent neuron groups.
 		inpts.update(self.get_inputs())
 		
@@ -111,7 +114,7 @@ class Network:
 					self.groups[group].x[:] = 0
 
 
-def save_params(model_name, params, fname, prefix):
+def save_params(params_path, params, fname, prefix):
 	'''
 	Save network params to disk.
 
@@ -119,10 +122,10 @@ def save_params(model_name, params, fname, prefix):
 		- params (numpy.ndarray): Array of params to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'), params)
+	np.save(os.path.join(params_path, '_'.join([prefix, fname]) + '.npy'), params)
 
 
-def load_params(model_name, fname, prefix):
+def load_params(params_path, fname, prefix):
 	'''
 	Load network params from disk.
 
@@ -133,10 +136,10 @@ def load_params(model_name, fname, prefix):
 	Returns:
 		- params (numpy.ndarray): Params stored in file `fname`.
 	'''
-	return np.load(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'))
+	return np.load(os.path.join(params_path, '_'.join([prefix, fname]) + '.npy'))
 
 
-def save_assignments(model_name, assignments, fname):
+def save_assignments(assign_path, assignments, fname):
 	'''
 	Save network assignments to disk.
 
@@ -144,10 +147,10 @@ def save_assignments(model_name, assignments, fname):
 		- assignments (numpy.ndarray): Array of assignments to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'), assignments)
+	np.save(os.path.join(assign_path, '_'.join(['assignments', fname]) + '.npy'), assignments)
 
 
-def load_assignments(model_name, fname):
+def load_assignments(assign_path, fname):
 	'''
 	Save network assignments to disk.
 
@@ -157,7 +160,7 @@ def load_assignments(model_name, fname):
 	Returns:
 		- assignments (numpy.ndarray): Assignments stored in file `fname`.
 	'''
-	return np.load(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'))
+	return np.load(os.path.join(assign_path, '_'.join(['assignments', fname]) + '.npy'))
 
 
 def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):

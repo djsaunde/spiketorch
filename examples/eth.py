@@ -6,17 +6,18 @@ import argparse
 import numpy as np
 import pickle as p
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from struct import unpack
 from datetime import datetime
 from torchvision import datasets
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch')))
 sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
 
 from network import *
+from plotting import *
+from classification import *
+
 from monitors import Monitor
 from synapses import Synapses, STDPSynapses
 from datasets import get_MNIST, generate_spike_train
@@ -38,59 +39,6 @@ for path in [logs_path, params_path, assign_path, results_path, perform_path]:
 np.set_printoptions(threshold=np.nan, linewidth=200)
 np.warnings.filterwarnings('ignore')
 torch.set_printoptions(threshold=np.nan, linewidth=100, edgeitems=10)
-
-
-def classify(spikes, voting_schemes, assignments):
-	'''
-	Given the neuron assignments and the network spiking
-	activity, make predictions about the data targets.
-	'''
-	spikes = spikes.sum(0)
-
-	predictions = {}
-	for scheme in voting_schemes:
-		rates = torch.zeros(10)
-
-		if scheme == 'all':
-			for idx in range(10):
-				n_assigns = torch.nonzero(assignments == idx).numel()
-				
-				if n_assigns > 0:
-					idxs = torch.nonzero((assignments == idx).long().view(-1)).view(-1)
-					rates[idx] = torch.sum(spikes[idxs]) / n_assigns
-
-		predictions[scheme] = torch.sort(rates, dim=0, descending=True)[1]
-
-	return predictions
-
-
-def assign_labels(inputs, outputs, rates, assignments):
-	'''
-	Given the excitatory neuron firing history, assign them class labels.
-	'''
-	if gpu:
-		inputs = torch.from_numpy(inputs).cuda()
-		outputs = torch.from_numpy(outputs).cuda()
-	else:
-		inputs = torch.from_numpy(inputs)
-		outputs = torch.from_numpy(outputs)
-
-	outputs = outputs.float()
-
-	# Loop over all target categories.
-	for j in range(10):
-		# Count the number of inputs having this target.
-		n_inputs = torch.nonzero(inputs == j).numel()
-		if n_inputs > 0:
-			# Get indices of inputs with this category.
-			idxs = torch.nonzero((inputs == j).long().view(-1)).view(-1)
-			# Calculate average firing rate per neuron, per category.
-			rates[:, j] = 0.9 * rates[:, j] + torch.sum(outputs[idxs], 0) / n_inputs
-
-	# Assignments of neurons are the categories for which they fire the most. 
-	assignments = torch.max(rates, 1)[1]
-
-	return rates, assignments
 
 
 parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
@@ -191,7 +139,7 @@ elif mode == 'test':
 X, y = data['X'], data['y']
 
 # Count spikes from each neuron on each example (between update intervals).
-spike_monitor = np.zeros([update_interval, n_neurons])
+outputs = torch.zeros([update_interval, n_neurons])
 
 # Network simulation times.
 image_time = time
@@ -219,7 +167,6 @@ n_input_sqrt = int(np.sqrt(n_input))
 n_neurons_sqrt = int(np.sqrt(n_neurons))
 
 # Run network simulation.
-plt.ion()
 start = timeit.default_timer()
 
 if mode == 'train':
@@ -246,7 +193,12 @@ for idx in range(n_samples):
 	if mode == 'train':
 		if idx > 0 and idx % update_interval == 0:
 			# Assign labels to neurons based on network spiking activity.
-			rates, assignments = assign_labels(y[(idx % n_images) - update_interval : idx % n_images], spike_monitor, rates, assignments)
+			if gpu:
+				inputs = torch.from_numpy(y[(idx % n_images) - update_interval : idx % n_images]).cuda()
+			else:
+				inputs = torch.from_numpy(y[(idx % n_images) - update_interval : idx % n_images])
+
+			rates, assignments = assign_labels(inputs, outputs, rates, assignments)
 
 			# Assess performance of network on last `update_interval` examples.
 			logging.info('\n'); print()
@@ -273,13 +225,13 @@ for idx in range(n_samples):
 						asgnmts = assignments.numpy()
 
 					if gpu:
-						save_params(model_name, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
-						save_params(model_name, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
-						save_assignments(model_name, assignments.cpu().numpy(), fname)
+						save_params(params_path, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
+						save_params(params_path, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
+						save_assignments(assign_path, assignments.cpu().numpy(), fname)
 					else:
-						save_params(model_name, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
-						save_params(model_name, network.get_theta('Ae').numpy(), fname, 'theta')
-						save_assignments(model_name, assignments.numpy(), fname)
+						save_params(params_path, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
+						save_params(params_path, network.get_theta('Ae').numpy(), fname, 'theta')
+						save_assignments(assign_path, assignments.numpy(), fname)
 
 			# Save sequence of performance estimates to file.
 			p.dump(performances, open(os.path.join(perform_path, fname), 'wb'))
@@ -317,122 +269,43 @@ for idx in range(n_samples):
 	network.reset()
 
 	# Add spikes from this iteration to the spike monitor
-	spike_monitor[idx % update_interval] = torch.sum(spikes['Ae'], 0).numpy()
+	outputs[idx % update_interval] = torch.sum(spikes['Ae'], 0)
 
 	# Optionally plot the excitatory, inhibitory spiking.
 	if plot:
 		if gpu:
-			inpt = inpts['X'].cpu().numpy()
-			Ae_spikes = spikes['Ae'].cpu().numpy(); Ai_spikes = spikes['Ai'].cpu().numpy()
+			inpt = inpts['X'].cpu().numpy().T
+			Ae_spikes = spikes['Ae'].cpu().numpy().T; Ai_spikes = spikes['Ai'].cpu().numpy().T
 			input_exc_weights = network.synapses[('X', 'Ae')].w.cpu().numpy()
-			asgnmts = assignments.cpu().numpy()
+			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
+			asgnmts = assignments.cpu().numpy().reshape([n_neurons_sqrt, n_neurons_sqrt]).T
+			
 			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').cpu().numpy()
-			# exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').cpu().numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
 			# inh_voltages = network.monitors[('Ai', 'v')].get('v').cpu().numpy(); network.monitors[('Ai', 'v')].reset()
 		else:
-			inpt = inpts['X'].numpy()
-			Ae_spikes = spikes['Ae'].numpy(); Ai_spikes = spikes['Ai'].numpy()
+			inpt = inpts['X'].numpy().T
+			Ae_spikes = spikes['Ae'].numpy().T; Ai_spikes = spikes['Ai'].numpy().T
 			input_exc_weights = network.synapses[('X', 'Ae')].w.numpy()
-			asgnmts = assignments.numpy()
+			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
+			asgnmts = assignments.numpy().reshape([n_neurons_sqrt, n_neurons_sqrt]).T
+			
 			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
-			# exc_theta = network.monitors[('Ae', ('v', 'theta'))].get('theta').numpy(); network.monitors[('Ae', ('v', 'theta'))].reset()
 			# inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
-			
+		
 		if idx == 0:
-			# Create figure for input image and corresponding spike trains.
-			input_figure, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(12, 6))
-			im0 = ax0.imshow(image.reshape(n_input_sqrt, n_input_sqrt), cmap='binary')
-			ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
-			im1 = ax1.imshow(np.sum(inpt, axis=0).reshape(n_input_sqrt, n_input_sqrt), cmap='binary')
-			ax1.set_title('Sum of spike trains')
-			im2 = ax2.imshow(inpt.T, cmap='binary')
-			ax2.set_title('Poisson spiking representation')
+			inpt_ims = plot_input(image.reshape(n_input_sqrt, n_input_sqrt), inpt)
+			spike_ims = plot_spikes(Ae_spikes, Ai_spikes)
+			weight_ims = plot_weights(square_weights, asgnmts, wmax=wmax)
+			performance_ax = plot_performance(performances)
 
-			plt.tight_layout()
-
-			# Create figure for excitatory and inhibitory neuron populations.
-			spike_figure, [ax3, ax4] = plt.subplots(2, figsize=(10, 5))
-			im3 = ax3.imshow(Ae_spikes.T, cmap='binary')
-			ax3.set_title('Excitatory spikes')
-			im4 = ax4.imshow(Ai_spikes.T, cmap='binary')
-			ax4.set_title('Inhibitory spikes')
-
-			plt.tight_layout()
-
-			# Create figure for input to excitatory weights and excitatory neuron assignments.
-			weights_figure, [ax5, ax6] = plt.subplots(1, 2, figsize=(10, 6))
-			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
-
-			im5 = ax5.imshow(square_weights, cmap='hot_r', vmin=0, vmax=wmax)
-			ax5.set_title('Input to excitatory weights')
-			
-			color = plt.get_cmap('RdBu', 11)
-			asgnmts = asgnmts.reshape([n_neurons_sqrt, n_neurons_sqrt]).T
-			im6 = ax6.matshow(asgnmts, cmap=color, vmin=-1.5, vmax=9.5)
-			ax6.set_title('Neuron labels')
-
-			div5 = make_axes_locatable(ax5)
-			div6 = make_axes_locatable(ax6)
-			cax5 = div5.append_axes("right", size="5%", pad=0.05)
-			cax6 = div6.append_axes("right", size="5%", pad=0.05)
-
-			plt.colorbar(im5, cax=cax5)
-			plt.colorbar(im6, cax=cax6, ticks=np.arange(-1, 10))
-
-			plt.tight_layout()
-
-			# Create figure to display plots of training accuracy over time.
-			if mode == 'train':
-				perf_figure, ax7 = plt.subplots()
-				for scheme in voting_schemes:
-					ax7.plot(range(len(performances[scheme])), [100 * p for p in performances[scheme]], label=scheme)
-
-				ax7.set_ylim([0, 100])
-				ax7.set_title('Estimated classification accuracy')
-				ax7.set_xlabel('No. of examples')
-				ax7.set_ylabel('Accuracy')
-				ax7.set_xticks(range(0, int(n_train / update_interval) + 1, 4), range(0, n_train + 1000, 1000))
-				ax7.set_xticklabels(range(0, n_train + 1000, 1000))
-				ax7.legend()
-
-			# voltages_figure, [ax8, ax9, ax10] = plt.subplots(3, 1, figsize=(8, 8))
-			# im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
-			# ax8.set_title('Excitatory voltages'); ax9.set_title('Inhibitory voltages'); ax10.set_title('Excitatory adaptive thresholds')
-
-			# plt.tight_layout()
+			# voltage_axes = plot_voltages(exc_voltages, inh_voltages)
 		else:
-			# Re-draw plotting data after each iteration.
-			im0.set_data(image.reshape(n_input_sqrt, n_input_sqrt))
-			im1.set_data(np.sum(inpt, axis=0).reshape(n_input_sqrt, n_input_sqrt))
-			im2.set_data(inpt.T)
-			im3.set_data(Ae_spikes.T)
-			im4.set_data(Ai_spikes.T)
+			inpt_ims = plot_input(image.reshape(n_input_sqrt, n_input_sqrt), inpt, ims=inpt_ims)
+			spike_ims = plot_spikes(Ae_spikes, Ai_spikes, ims=spike_ims)
+			weight_ims = plot_weights(square_weights, asgnmts, ims=weight_ims)
+			performance_ax = plot_performance(performances, ax=performance_ax)
 
-			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
-			
-			im5.set_data(square_weights)
-
-			asgnmts = asgnmts.reshape([n_neurons_sqrt, n_neurons_sqrt]).T
-			im6.set_data(asgnmts)
-
-			if mode == 'train':
-				ax7.clear()
-				for scheme in voting_schemes:
-					ax7.plot(range(len(performances[scheme])), [100 * p for p in performances[scheme]], label=scheme)
-
-				ax7.set_ylim([0, 100])
-				ax7.set_title('Estimated classification accuracy')
-				ax7.set_xlabel('No. of examples')
-				ax7.set_ylabel('Accuracy')
-				ax7.set_xticks(range(0, int(n_train / update_interval) + 1, 4))
-				ax7.set_xticklabels(range(0, n_train + 1000, 1000))
-				ax7.legend()
-
-			# ax8.clear(); ax9.clear(); ax10.clear()
-			# im8 = ax8.plot(exc_voltages); im9 = ax9.plot(inh_voltages); ax10.plot(exc_theta)
-
-			# Update title of input digit plot to reflect current iteration.
-			ax0.set_title('Original MNIST digit (Iteration %d)' % idx)
+			# voltage_axes = plot_voltages(exc_voltages, inh_voltages, axes=voltage_axes)
 		
 		plt.pause(1e-8)
 
@@ -456,13 +329,13 @@ for scheme in voting_schemes:
 # Save out network parameters and assignments for the test phase.
 if mode == 'train':
 	if gpu:
-		save_params(model_name, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
-		save_params(model_name, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
-		save_assignments(model_name, assignments.cpu().numpy(), fname)
+		save_params(params_path, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
+		save_params(params_path, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
+		save_assignments(assign_path, assignments.cpu().numpy(), fname)
 	else:
-		save_params(model_name, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
-		save_params(model_name, network.get_theta('Ae').numpy(), fname, 'theta')
-		save_assignments(model_name, assignments.numpy(), fname)
+		save_params(params_path, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
+		save_params(params_path, network.get_theta('Ae').numpy(), fname, 'theta')
+		save_assignments(assign_path, assignments.numpy(), fname)
 
 if mode == 'test':
 	results = pd.DataFrame([[datetime.now(), fname] + list(results.values())], columns=['date', 'parameters'] + list(results.keys()))
