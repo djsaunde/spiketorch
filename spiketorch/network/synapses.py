@@ -1,6 +1,5 @@
 import torch
 
-
 class Synapses:
 	'''
 	Specifies constant synapses between two populations of neurons.

@@ -64,6 +64,7 @@ class LIFGroup(Group):
 		super().__init__()
 
 		self.n = n  # No. of neurons.
+		self.traces = traces  # Whether to record synpatic traces.
 		self.rest = rest  # Rest voltage.
 		self.reset = reset  # Post-spike reset voltage.
 		self.threshold = threshold  # Spike threshold voltage.
@@ -83,8 +84,8 @@ class LIFGroup(Group):
 		# Decay voltages.
 		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
-		if mode == 'train':
-			# Decay spike traces and adaptive thresholds.
+		if mode == 'train' and self.traces:
+			# Decay spike traces.
 			self.x -= dt * self.trace_tc * self.x
 
 		# Decrement refractory counters.
@@ -98,7 +99,7 @@ class LIFGroup(Group):
 		# Integrate input and decay voltages.
 		self.v += sum([inpts[key] for key in inpts])
 
-		if mode == 'train':
+		if mode == 'train' and self.traces:
 			# Setting synaptic traces.
 			self.x[self.s.byte()] = 1.0
 
@@ -122,6 +123,7 @@ class AdaptiveLIFGroup(Group):
 		super().__init__()
 
 		self.n = n  # No. of neurons.
+		self.traces = traces  # Whether to record synpatic traces.
 		self.rest = rest  # Rest voltage.
 		self.reset = reset  # Post-spike reset voltage.
 		self.threshold = threshold  # Spike threshold voltage.
@@ -146,7 +148,9 @@ class AdaptiveLIFGroup(Group):
 
 		if mode == 'train':
 			# Decay spike traces and adaptive thresholds.
-			self.x -= dt * self.trace_tc * self.x
+			if self.traces:
+				self.x -= dt * self.trace_tc * self.x
+			
 			self.theta -= dt * self.theta_decay * self.theta
 
 		# Decrement refractory counters.
@@ -166,7 +170,7 @@ class AdaptiveLIFGroup(Group):
 		# Integrate inputs.
 		self.v += sum([inpts[key] for key in inpts])
 
-		if mode == 'train':
+		if mode == 'train' and self.traces:
 			# Update adaptive thresholds, synaptic traces.
 			self.theta[self.s] += self.theta_plus
 			self.x[self.s] = 1.0

@@ -15,11 +15,14 @@ from datetime import datetime
 from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from spiketorch.util import *
-from spiketorch.network import Network
-from spiketorch.monitors import Monitor
-from spiketorch.synapses import Synapses, STDPSynapses
-from spiketorch.groups import InputGroup, LIFGroup, AdaptiveLIFGroup
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch')))
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
+
+from util import *
+from network import Network
+from monitors import Monitor
+from synapses import Synapses, STDPSynapses
+from groups import InputGroup, LIFGroup, AdaptiveLIFGroup
 
 model_name = 'eth'
 

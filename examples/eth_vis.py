@@ -5,9 +5,12 @@ import matplotlib.pyplot as plt
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-params_path = os.path.join('..', '..', 'params')
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch')))
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
 
-from spiketorch.util import *
+from util import *
+
+params_path = os.path.join('..', '..', 'params')
 
 
 parser = argparse.ArgumentParser()

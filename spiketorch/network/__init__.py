@@ -1,14 +1,15 @@
+import os, sys
 import torch
 
-import spiketorch.groups as groups
-import spiketorch.synapses as synapses
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
 
+import groups, synapses
 
 class Network:
 	'''
 	Combines neuron groups and synapses into a spiking neural network.
 	'''
-	def __init__(self, dt):
+	def __init__(self, dt=1):
 		self.dt = dt
 		self.groups = {}
 		self.synapses = {}
@@ -37,6 +38,7 @@ class Network:
 			inpts[key[1]][key[0]] = source.s.float() @ weights
 
 		return inpts
+
 
 	def get_weights(self, name):
 		return self.synapses[name].w
@@ -93,15 +95,16 @@ class Network:
 
 		return spikes
 
-	def reset(self):
+	def reset(self, attrs=['v', 'x']):
 		'''
-		Reset relevant state variables after a single iteration.
+		Resets certain state variables.
 		'''
 		for group in self.groups:
-			if hasattr(self.groups[group], 'v'):
-				# Voltages.
-				self.groups[group].v[:] = self.groups[group].rest
+			for attr in attrs:
+				if hasattr(self.groups[group], attr) and attr in ['v']:
+					# Voltages.
+					self.groups[group].v[:] = self.groups[group].rest
 
-			if hasattr(self.groups[group], 'x'):
-				# Synaptic traces.
-				self.groups[group].x[:] = 0
+				if hasattr(self.groups[group], attr) and attr in ['x', 'theta']:
+					# Synaptic traces or adaptive thresholds.
+					self.groups[group].x[:] = 0

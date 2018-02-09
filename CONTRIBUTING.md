@@ -35,10 +35,10 @@ If new branches have been created on the remote repository, you may start tracki
 After making changes to the repository, issue a `git status` command to see which files have been modified. Then, use
 
 ```
-git add [file-name(s) | -a]  # add modified or newly created files
+git add [file-name(s) | -A]  # add modified or newly created files
 ```
 
-to add one or more modified files (`file-name(s)`), or all modified files (`-a`). These include newly created files. Issue
+to add one or more modified files (`file-name(s)`), or all modified files (`-A` or `--all`). These include newly created files. Issue
 
 ```
 git commit -m "[commit-message]"  # Useful messages help when reverting / searching through history 
