@@ -26,7 +26,7 @@ All code was developed using Python 3.6.x, and will fail if run with Python 2.x.
 
 ## Setting things up
 
-To begin, download and unzip the MNIST dataset by running `./data/get_MNIST.sh`. To build the `spiketorch` package from source, change directory to the top level of this project and issue `pip install .` (PyPI support *hopefully* coming soon).
+To begin, download and unzip the MNIST dataset by running `./data/get_MNIST.sh`. To build the `spiketorch` package from source, change directory to the top level of this project and issue `pip install .` (PyPI support *hopefully* coming soon). After making changing to code in the `spiketorch` directory, issue `pip install . -U` or `pip install . --upgrade` at the top level of the project.
 
 To replicate the SNN from the [above paper](https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#), run `python examples/eth.py`. There are a number of optional command-line arguments which can be passed in, including `--plot` (displays useful monitoring figures), `--n_neurons [int]` (number of excitatory, inhibitory neurons simulated), `--mode ['train' | 'test']` (sets network operation to the training or testing phase), and more. Run `python code/eth.py --help` for more information on the command-line arguments.
 
