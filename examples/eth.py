@@ -1,8 +1,6 @@
-import os
-import sys
-import time
+import os, sys
+import time, timeit
 import torch
-import timeit
 import logging
 import argparse
 import numpy as np
@@ -15,11 +13,14 @@ from datetime import datetime
 from torchvision import datasets
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from spiketorch.util import *
-from spiketorch.network import Network
-from spiketorch.monitors import Monitor
-from spiketorch.synapses import Synapses, STDPSynapses
-from spiketorch.groups import InputGroup, LIFGroup, AdaptiveLIFGroup
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch')))
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
+
+from network import *
+from monitors import Monitor
+from synapses import Synapses, STDPSynapses
+from datasets import get_MNIST, generate_spike_train
+from groups import InputGroup, LIFGroup, AdaptiveLIFGroup
 
 model_name = 'eth'
 
@@ -181,17 +182,13 @@ network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_i
 # network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
 # network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
 
-# Get training, test data from disk.
+# Get training or test data from disk.
 if mode == 'train':
-	data = get_labeled_data('train', train=True)
+	data = get_MNIST(train=True)
 elif mode == 'test':
-	data = get_labeled_data('test', train=False)
+	data = get_MNIST(train=False)
 
-# Convert data into torch Tensors.
-if mode == 'train':
-	X, y = data['X'], data['y']
-elif mode == 'test':
-	X, y = data['X'], data['y']
+X, y = data['X'], data['y']
 
 # Count spikes from each neuron on each example (between update intervals).
 spike_monitor = np.zeros([update_interval, n_neurons])

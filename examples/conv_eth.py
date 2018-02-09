@@ -1,8 +1,6 @@
-import os
-import sys
-import time
+import os, sys
+import time, timeit
 import torch
-import timeit
 import argparse
 import numpy as np
 import pickle as p
@@ -15,7 +13,10 @@ from torch.autograd import Variable
 from torch.nn.functional import conv2d
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from spiketorch.util import *
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch')))
+sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
+
+from util import *
 
 data_path = os.path.join('..', '..', 'data')
 params_path = os.path.join('..', '..', 'params')

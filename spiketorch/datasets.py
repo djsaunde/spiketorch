@@ -1,29 +1,25 @@
-import os
-import sys
+import os, sys
 import torch
 import numpy as np
 import pickle as p
 
 from struct import unpack
 
-data_path = os.path.join('..', 'data')
-params_path = os.path.join('..', 'params')
-assign_path = os.path.join('..', 'assignments')
-results_path = os.path.join('..', 'results')
+data_path = os.path.expanduser(os.path.join('~', 'code', 'spiketorch', 'data'))
 
-for path in [ params_path, assign_path, results_path ]:
-	if not os.path.isdir(path):
-		os.makedirs(path)
+if not os.path.isdir(data_path):
+	os.makedirs(data_path)
 
-
-def get_labeled_data(filename, train=True):
+def get_MNIST(train=True, data_path=data_path):
 	'''
 	Read input-vector (image) and target class (label, 0-9) and return it as 
 	a list of tuples.
 	'''
-	if os.path.isfile(os.path.join(data_path, '%s.p' % filename)):
+	fname = 'train' if train else 'test'
+
+	if os.path.isfile(os.path.join(data_path, '%s.p' % fname)):
 		# Get pickled data from disk.
-		data = p.load(open(os.path.join(data_path, '%s.p' % filename), 'rb'))
+		data = p.load(open(os.path.join(data_path, '%s.p' % fname), 'rb'))
 	else:
 		# Open the images with gzip in read binary mode.
 		if train:
@@ -65,7 +61,7 @@ def get_labeled_data(filename, train=True):
 		X = X.reshape([N, 784])
 		data = {'X': X, 'y': y }
 
-		p.dump(data, open(os.path.join(data_path, '%s.p' % filename), 'wb'))
+		p.dump(data, open(os.path.join(data_path, '%s.p' % fname), 'wb'))
 
 	return data
 
@@ -135,94 +131,3 @@ def generate_2d_spike_train(image, intensity, time):
 
 	# Return the input spike occurrence matrix.
 	return spikes.reshape([time, 1, n_input_sqrt, n_input_sqrt])
-
-
-def save_params(model_name, params, fname, prefix):
-	'''
-	Save network params to disk.
-
-	Arguments:
-		- params (numpy.ndarray): Array of params to save.
-		- fname (str): File name of file to write to.
-	'''
-	np.save(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'), params)
-
-
-def load_params(model_name, fname, prefix):
-	'''
-	Load network params from disk.
-
-	Arguments:
-		- fname (str): File name of file to read from.
-		- prefix (str): Name of the parameters to read from disk.
-
-	Returns:
-		- params (numpy.ndarray): Params stored in file `fname`.
-	'''
-	return np.load(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'))
-
-
-def save_assignments(model_name, assignments, fname):
-	'''
-	Save network assignments to disk.
-
-	Arguments:
-		- assignments (numpy.ndarray): Array of assignments to save.
-		- fname (str): File name of file to write to.
-	'''
-	np.save(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'), assignments)
-
-
-def load_assignments(model_name, fname):
-	'''
-	Save network assignments to disk.
-
-	Arguments:
-		- fname (str): File name of file to read from.
-
-	Returns:
-		- assignments (numpy.ndarray): Assignments stored in file `fname`.
-	'''
-	return np.load(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'))
-
-
-def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
-	'''
-	Get the weights from the input to excitatory layer and reshape them.
-	'''
-	square_weights = np.zeros([n_input_sqrt * n_neurons_sqrt, \
-								n_input_sqrt * n_neurons_sqrt])
-
-	for n in range(n_neurons_sqrt ** 2):
-		filtr = weights[:, n]
-		square_weights[(n % n_neurons_sqrt) * n_input_sqrt : \
-					((n % n_neurons_sqrt) + 1) * n_input_sqrt, \
-					((n // n_neurons_sqrt) * n_input_sqrt) : \
-					((n // n_neurons_sqrt) + 1) * n_input_sqrt] = \
-						filtr.reshape([n_input_sqrt, n_input_sqrt])
-	
-	return square_weights
-
-
-def get_conv_weights(weights, kernel_size, stride, n_patches, n_patch_neurons):
-	n_patches_sqrt = int(np.sqrt(n_patches))
-	n_patch_neurons_sqrt = int(np.sqrt(n_patch_neurons))
-
-	rearranged = np.zeros([kernel_size * n_patch_neurons, kernel_size * n_patches])
-
-	for patch in range(n_patches):
-		for neuron in range(n_patch_neurons):
-			rearranged[kernel_size * neuron : kernel_size * (neuron + 1), kernel_size * patch : kernel_size * (patch + 1)] = weights[patch]
-
-	return rearranged.T
-
-
-def get_convolution_locations(neuron, n_patch_neurons_sqrt, n_input_sqrt, kernel_size, stride):
-	convolution_locations = [0] * (n_input_sqrt ** 2)
-
-	for x in range(kernel_size):
-		for y in range(kernel_size):
-			convolution_locations[(((neuron % n_patch_neurons_sqrt) * stride + (neuron // \
-				n_patch_neurons_sqrt) * n_input_sqrt * stride) + (x * n_input_sqrt) + y)] = 1
-
-	return convolution_locations
