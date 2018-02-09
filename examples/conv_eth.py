@@ -1,8 +1,6 @@
-import os
-import sys
-import time
+import os, sys
+import time, timeit
 import torch
-import timeit
 import argparse
 import numpy as np
 import pickle as p

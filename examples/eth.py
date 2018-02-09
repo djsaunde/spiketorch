@@ -1,8 +1,6 @@
-import os
-import sys
-import time
+import os, sys
+import time, timeit
 import torch
-import timeit
 import logging
 import argparse
 import numpy as np
