@@ -49,7 +49,7 @@ to "commit" your changes to your local repository, where `[commit-message]` is a
 Before pushing your changes to the remote repository, you must make sure that you have an up-to-date version of the `master` code. That is, if master has been updated while you have been making your changes, your code will be out of date with respect to the master branch. Issue
 
 ```
-git merge [origin] master
+git merge [origin]/master
 ```
 
 and fix any merge conflicts that may have resulted, and re-commit after the fix with
