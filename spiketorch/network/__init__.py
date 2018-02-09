@@ -1,5 +1,6 @@
-import os, sys
 import torch
+import os, sys
+import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
 
@@ -108,3 +109,94 @@ class Network:
 				if hasattr(self.groups[group], attr) and attr in ['x', 'theta']:
 					# Synaptic traces or adaptive thresholds.
 					self.groups[group].x[:] = 0
+
+
+def save_params(model_name, params, fname, prefix):
+	'''
+	Save network params to disk.
+
+	Arguments:
+		- params (numpy.ndarray): Array of params to save.
+		- fname (str): File name of file to write to.
+	'''
+	np.save(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'), params)
+
+
+def load_params(model_name, fname, prefix):
+	'''
+	Load network params from disk.
+
+	Arguments:
+		- fname (str): File name of file to read from.
+		- prefix (str): Name of the parameters to read from disk.
+
+	Returns:
+		- params (numpy.ndarray): Params stored in file `fname`.
+	'''
+	return np.load(os.path.join(params_path, model_name, '_'.join([prefix, fname]) + '.npy'))
+
+
+def save_assignments(model_name, assignments, fname):
+	'''
+	Save network assignments to disk.
+
+	Arguments:
+		- assignments (numpy.ndarray): Array of assignments to save.
+		- fname (str): File name of file to write to.
+	'''
+	np.save(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'), assignments)
+
+
+def load_assignments(model_name, fname):
+	'''
+	Save network assignments to disk.
+
+	Arguments:
+		- fname (str): File name of file to read from.
+
+	Returns:
+		- assignments (numpy.ndarray): Assignments stored in file `fname`.
+	'''
+	return np.load(os.path.join(assign_path, model_name, '_'.join(['assignments', fname]) + '.npy'))
+
+
+def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
+	'''
+	Get the weights from the input to excitatory layer and reshape them.
+	'''
+	square_weights = np.zeros([n_input_sqrt * n_neurons_sqrt, \
+								n_input_sqrt * n_neurons_sqrt])
+
+	for n in range(n_neurons_sqrt ** 2):
+		filtr = weights[:, n]
+		square_weights[(n % n_neurons_sqrt) * n_input_sqrt : \
+					((n % n_neurons_sqrt) + 1) * n_input_sqrt, \
+					((n // n_neurons_sqrt) * n_input_sqrt) : \
+					((n // n_neurons_sqrt) + 1) * n_input_sqrt] = \
+						filtr.reshape([n_input_sqrt, n_input_sqrt])
+	
+	return square_weights
+
+
+def get_conv_weights(weights, kernel_size, stride, n_patches, n_patch_neurons):
+	n_patches_sqrt = int(np.sqrt(n_patches))
+	n_patch_neurons_sqrt = int(np.sqrt(n_patch_neurons))
+
+	rearranged = np.zeros([kernel_size * n_patch_neurons, kernel_size * n_patches])
+
+	for patch in range(n_patches):
+		for neuron in range(n_patch_neurons):
+			rearranged[kernel_size * neuron : kernel_size * (neuron + 1), kernel_size * patch : kernel_size * (patch + 1)] = weights[patch]
+
+	return rearranged.T
+
+
+def get_convolution_locations(neuron, n_patch_neurons_sqrt, n_input_sqrt, kernel_size, stride):
+	convolution_locations = [0] * (n_input_sqrt ** 2)
+
+	for x in range(kernel_size):
+		for y in range(kernel_size):
+			convolution_locations[(((neuron % n_patch_neurons_sqrt) * stride + (neuron // \
+				n_patch_neurons_sqrt) * n_input_sqrt * stride) + (x * n_input_sqrt) + y)] = 1
+
+	return convolution_locations
