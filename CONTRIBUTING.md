@@ -30,6 +30,8 @@ $ git branch
   master
 ```
 
+If new branches have been created on the remote repository, you may start tracking them with ```git pull --all```, and check them out using ```git checkout [branch-name]```, as before. ```git branch -a``` will list all locally tracked branches, and well as list all remote branches (which can be checked out!).
+
 After making changes to the repository, issue a `git status` command to see which files have been modified. Then, use
 
 ```
