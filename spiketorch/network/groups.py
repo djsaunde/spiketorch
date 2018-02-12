@@ -93,7 +93,7 @@ class LIFGroup(Group):
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold) * (self.refrac_count == 0)
-		self.refrac_count[self.s] = dt * self.refractory
+		self.refrac_count[self.s] = self.refractory
 		self.v[self.s] = self.reset
 
 		# Integrate input and decay voltages.
@@ -101,7 +101,7 @@ class LIFGroup(Group):
 
 		if mode == 'train' and self.traces:
 			# Setting synaptic traces.
-			self.x[self.s.byte()] = 1.0
+			self.x[self.s] = 1.0
 
 	def get_spikes(self):
 		return self.s
@@ -165,7 +165,6 @@ class AdaptiveLIFGroup(Group):
 		if torch.sum(self.s) > 0:
 			s = torch.zeros(self.s.size())
 			s[torch.multinomial(self.s.float(), 1)] = 1
-			self.s = s.byte()
 
 		# Integrate inputs.
 		self.v += sum([inpts[key] for key in inpts])

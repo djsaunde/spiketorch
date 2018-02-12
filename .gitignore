@@ -11,11 +11,14 @@ results/
 performances/
 logs/
 
-# PyCache (whatever that is!)
+# PyCache (whatever that is!).
 spiketorch/__pycache__
 
-# Job reports (from HPC experiments)
+# Job reports (from HPC experiments).
 job_reports/
 
-# IPython notebook checkpoints
+# IPython notebook checkpoints.
 *.ipynb_checkpoints
+
+# Line profiling results.
+*.lprof
