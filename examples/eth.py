@@ -110,22 +110,22 @@ network.add_group(LIFGroup(n_neurons, traces=traces, rest=-60.0, reset=-45.0,
 # Add synaptic connections between populations
 if mode == 'train':
 	network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
-					wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+			wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), source='X', target='Ae')
 elif mode == 'test':
 	if gpu:
 		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
 					w=torch.from_numpy(load_params(model_name, fname, 'X_Ae')).cuda(),
-						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), source='X', target='Ae')
 	else:
 		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
 							w=torch.from_numpy(load_params(model_name, fname, 'X_Ae')),
-						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), source='X', target='Ae')
 
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
-					w=torch.diag(c_excite * torch.ones(n_neurons))), name=('Ae', 'Ai'))
+					w=torch.diag(c_excite * torch.ones(n_neurons))), source='Ae', target='Ai')
 network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_inhib * \
 									(torch.ones([n_neurons, n_neurons]) - torch.diag(1 \
-											* torch.ones(n_neurons)))), name=('Ai', 'Ae'))
+											* torch.ones(n_neurons)))), source='Ai', target='Ae')
 
 # network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
 # network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
