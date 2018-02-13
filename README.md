@@ -31,3 +31,13 @@ The concept that the neuron spike ordering and their relative timing encode info
 We are interested in applying SNNs to machine learning problems. We use STDP to modify weights of synapses connecting pairs or populations of neurons in SNNs. In the context of ML, we want to learn a setting of synapse weights which will generate appropriate data-dependent spiking activity in SNNs. This activity will allow us to subsequently perform some ML task of interest; e.g., discriminating or clustering input data.
 
 For now, we use the [MNIST handwritten digit dataset](http://yann.lecun.com/exdb/mnist/), which, though somewhat antiquated, is simple enough to develop new machine learning techniques on. The goal is to find a setting of synapse weights which will allow us to discriminate categories of input data. Based on historical spiking activity on training examples, we assign each neuron in an excitatory population an input category and subsequently classify test data based on these assignments.
+
+## Contributors
+
+- Daniel Saunders ([email](mailto:djsaunde@cs.umass.com) | [webpage](https://djsaunde.github.io))
+
+- Hananel Hazan ([email](mailto:hhazan@cs.umass.edu))
+
+- Darpan Sanghavi ([email](mailto:dsanghavi@cs.umass.edu))
+
+- Hassaan Khan ([email](mailto:hqkhan@umass.edu))
