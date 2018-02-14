@@ -14,6 +14,15 @@ class Group(ABC):
 	def step(self, inpts, mode):
 		pass
 
+	def get_spikes(self):
+		return self.s
+
+	def get_voltages(self):
+		return self.v
+
+	def get_traces(self):
+		return self.x
+
 
 class InputGroup(Group):
 	'''
@@ -43,15 +52,6 @@ class InputGroup(Group):
 		if mode == 'train':
 			# Setting synaptic traces.
 			self.x[self.s.byte()] = 1.0
-
-	def get_spikes(self):
-		return self.s
-
-	def get_voltages(self):
-		return self.v
-
-	def get_traces(self):
-		return self.traces
 
 
 class LIFGroup(Group):
@@ -93,7 +93,7 @@ class LIFGroup(Group):
 
 		# Check for spiking neurons.
 		self.s = (self.v >= self.threshold) * (self.refrac_count == 0)
-		self.refrac_count[self.s] = dt * self.refractory
+		self.refrac_count[self.s] = self.refractory
 		self.v[self.s] = self.reset
 
 		# Integrate input and decay voltages.
@@ -101,16 +101,7 @@ class LIFGroup(Group):
 
 		if mode == 'train' and self.traces:
 			# Setting synaptic traces.
-			self.x[self.s.byte()] = 1.0
-
-	def get_spikes(self):
-		return self.s
-
-	def get_voltages(self):
-		return self.v
-
-	def get_traces(self):
-		return self.traces
+			self.x[self.s] = 1.0
 
 
 class AdaptiveLIFGroup(Group):
@@ -165,7 +156,6 @@ class AdaptiveLIFGroup(Group):
 		if torch.sum(self.s) > 0:
 			s = torch.zeros(self.s.size())
 			s[torch.multinomial(self.s.float(), 1)] = 1
-			self.s = s.byte()
 
 		# Integrate inputs.
 		self.v += sum([inpts[key] for key in inpts])
@@ -174,12 +164,3 @@ class AdaptiveLIFGroup(Group):
 			# Update adaptive thresholds, synaptic traces.
 			self.theta[self.s] += self.theta_plus
 			self.x[self.s] = 1.0
-
-	def get_spikes(self):
-		return self.s
-
-	def get_voltages(self):
-		return self.v
-
-	def get_traces(self):
-		return self.traces

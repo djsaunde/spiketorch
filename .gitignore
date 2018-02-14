@@ -22,3 +22,9 @@ job_reports/
 
 # Line profiling results.
 *.lprof
+
+# pytest cache.
+.pytest_cache/
+
+# pycache.
+*__pycache__/
