@@ -114,11 +114,11 @@ if mode == 'train':
 elif mode == 'test':
 	if gpu:
 		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
-					w=torch.from_numpy(load_params(model_name, fname, 'X_Ae')).cuda(),
+					w=torch.from_numpy(load_params(params_path, fname, 'X_Ae')).cuda(),
 						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
 	else:
 		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
-							w=torch.from_numpy(load_params(model_name, fname, 'X_Ae')),
+							w=torch.from_numpy(load_params(params_path, fname, 'X_Ae')),
 						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
 
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
@@ -154,9 +154,9 @@ if mode == 'train':
 	assignments = -1 * torch.ones(n_neurons)
 elif mode == 'test':
 	if gpu:
-		assignments = torch.from_numpy(load_assignments(model_name, fname)).cuda()
+		assignments = torch.from_numpy(load_assignments(assign_path, fname)).cuda()
 	else:
-		assignments = torch.from_numpy(load_assignments(model_name, fname))
+		assignments = torch.from_numpy(load_assignments(assign_path, fname))
 
 # Keep track of correct classifications for performance monitoring.
 correct = { scheme : 0 for scheme in voting_schemes }
