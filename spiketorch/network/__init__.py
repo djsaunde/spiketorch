@@ -19,8 +19,8 @@ class Network:
 	def add_group(self, group, name):
 		self.groups[name] = group
 
-	def add_synapses(self, synapses, name):
-		self.synapses[name] = synapses
+	def add_synapses(self, synapses, source, target):
+		self.synapses[(source, target)] = synapses
 
 	def add_monitor(self, monitor, name):
 		self.monitors[name] = monitor
@@ -39,7 +39,6 @@ class Network:
 			inpts[key[1]][key[0]] = source.s.float() @ weights
 
 		return inpts
-
 
 	def get_weights(self, name):
 		return self.synapses[name].w

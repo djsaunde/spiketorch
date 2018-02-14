@@ -14,6 +14,15 @@ class Group(ABC):
 	def step(self, inpts, mode):
 		pass
 
+	def get_spikes(self):
+		return self.s
+
+	def get_voltages(self):
+		return self.v
+
+	def get_traces(self):
+		return self.x
+
 
 class InputGroup(Group):
 	'''
@@ -43,15 +52,6 @@ class InputGroup(Group):
 		if mode == 'train':
 			# Setting synaptic traces.
 			self.x[self.s.byte()] = 1.0
-
-	def get_spikes(self):
-		return self.s
-
-	def get_voltages(self):
-		return self.v
-
-	def get_traces(self):
-		return self.traces
 
 
 class LIFGroup(Group):
@@ -102,15 +102,6 @@ class LIFGroup(Group):
 		if mode == 'train' and self.traces:
 			# Setting synaptic traces.
 			self.x[self.s] = 1.0
-
-	def get_spikes(self):
-		return self.s
-
-	def get_voltages(self):
-		return self.v
-
-	def get_traces(self):
-		return self.traces
 
 
 class AdaptiveLIFGroup(Group):
@@ -173,12 +164,3 @@ class AdaptiveLIFGroup(Group):
 			# Update adaptive thresholds, synaptic traces.
 			self.theta[self.s] += self.theta_plus
 			self.x[self.s] = 1.0
-
-	def get_spikes(self):
-		return self.s
-
-	def get_voltages(self):
-		return self.v
-
-	def get_traces(self):
-		return self.traces
