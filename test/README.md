@@ -1,6 +1,6 @@
 # Test Protocol (work in progress)
 
-For the time being, we'll use the (`pytest`)[https://docs.pytest.org/en/latest/] unit testing framework in Python. This is a simple alternative to the Python standard library's `unittest` module. 
+For the time being, we'll use the [`pytest`](https://docs.pytest.org/en/latest/) unit testing framework in Python. This is a simple alternative to the Python standard library's `unittest` module. 
 
 ## Organization
 
@@ -13,6 +13,3 @@ Every function should be tested as a unit, to the extent that it is possible, an
 ## Integration tests
 
 Integration tests (groups of components are combined to produce an output) will also be very important. Simple networks should be built, and pre-computed outputs of short simulations should be compared to simulation results. Not all corner cases are easily covered here, but those which are in use in experimental scripts should be tested thoroughly in this way.
-
-## Stress tests
-
