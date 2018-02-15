@@ -53,7 +53,7 @@ class Network:
 		# Record spikes from each population over the iteration.
 		spikes = {}
 		for key in self.groups:
-			spikes[key] = torch.zeros(int(time / self.dt), self.groups[key].n)
+			spikes[key] = torch.zeros_like(torch.Tensor(int(time / self.dt), self.groups[key].n))
 
 		for monitor in self.monitors:
 			self.monitors[monitor].reset()
@@ -166,8 +166,8 @@ def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
 	'''
 	Get the weights from the input to excitatory layer and reshape them.
 	'''
-	square_weights = np.zeros([n_input_sqrt * n_neurons_sqrt, \
-								n_input_sqrt * n_neurons_sqrt])
+	square_weights = np.zeros_like(torch.Tensor([n_input_sqrt * n_neurons_sqrt,
+												n_input_sqrt * n_neurons_sqrt]))
 
 	for n in range(n_neurons_sqrt ** 2):
 		filtr = weights[:, n]
@@ -184,7 +184,7 @@ def get_conv_weights(weights, kernel_size, stride, n_patches, n_patch_neurons):
 	n_patches_sqrt = int(np.sqrt(n_patches))
 	n_patch_neurons_sqrt = int(np.sqrt(n_patch_neurons))
 
-	rearranged = np.zeros([kernel_size * n_patch_neurons, kernel_size * n_patches])
+	rearranged = np.zeros_like(torch.Tensor([kernel_size * n_patch_neurons, kernel_size * n_patches]))
 
 	for patch in range(n_patches):
 		for neuron in range(n_patch_neurons):

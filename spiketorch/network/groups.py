@@ -32,10 +32,10 @@ class InputGroup(Group):
 		super().__init__()
 
 		self.n = n  # No. of neurons.
-		self.s = torch.zeros(n)  # Spike occurences.
+		self.s = torch.zeros_like(torch.Tensor(n))  # Spike occurences.
 		
 		if traces:
-			self.x = torch.zeros(n)  # Firing traces.
+			self.x = torch.zeros_like(torch.Tensor(n))  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
 	def step(self, inpts, mode, dt):
@@ -71,14 +71,14 @@ class LIFGroup(Group):
 		self.refractory = refractory  # Post-spike refractory period.
 		self.voltage_decay = voltage_decay  # Rate of decay of neuron voltage.
 
-		self.v = self.rest * torch.ones(n)  # Neuron voltages.
-		self.s = torch.zeros(n)  # Spike occurences.
+		self.v = self.rest * torch.ones_like(torch.Tensor(n))  # Neuron voltages.
+		self.s = torch.zeros_like(torch.Tensor(n))  # Spike occurences.
 
 		if traces:
-			self.x = torch.zeros(n)  # Firing traces.
+			self.x = torch.zeros_like(torch.Tensor(n))  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
-		self.refrac_count = torch.zeros(n)  # Refractory period counters.
+		self.refrac_count = torch.zeros_like(torch.Tensor(n))  # Refractory period counters.
 
 	def step(self, inpts, mode, dt):
 		# Decay voltages.
@@ -123,15 +123,15 @@ class AdaptiveLIFGroup(Group):
 		self.theta_plus = theta_plus  # Constant mV to raise threshold potential post-firing.
 		self.theta_decay = theta_decay  # Rate of decay of adaptive threshold potential.
 
-		self.v = self.rest * torch.ones(n)  # Neuron voltages.
-		self.s = torch.zeros(n)  # Spike occurences.
-		self.theta = torch.zeros(n)  # Adaptive threshold parameters.
+		self.v = self.rest * torch.ones_like(torch.Tensor(n))  # Neuron voltages.
+		self.s = torch.zeros_like(torch.Tensor(n))  # Spike occurences.
+		self.theta = torch.zeros_like(torch.Tensor(n))  # Adaptive threshold parameters.
 
 		if traces:
-			self.x = torch.zeros(n)  # Firing traces.
+			self.x = torch.zeros_like(torch.Tensor(n))  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
-		self.refrac_count = torch.zeros(n)  # Refractory period counters.
+		self.refrac_count = torch.zeros_like(torch.Tensor(n))  # Refractory period counters.
 
 	def step(self, inpts, mode, dt):
 		# Decay voltages.
@@ -154,7 +154,7 @@ class AdaptiveLIFGroup(Group):
 
 		# Choose only a single neuron to spike (ETH replication).
 		if torch.sum(self.s) > 0:
-			s = torch.zeros(self.s.size())
+			s = torch.zeros_like(torch.Tensor(self.s.size()))
 			s[torch.multinomial(self.s.float(), 1)] = 1
 
 		# Integrate inputs.

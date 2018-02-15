@@ -122,10 +122,10 @@ elif mode == 'test':
 						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
 
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
-					w=torch.diag(c_excite * torch.ones(n_neurons))), source='Ae', target='Ai')
+					w=torch.diag(c_excite * torch.ones_like(torch.Tensor(n_neurons)))), source='Ae', target='Ai')
 network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_inhib * \
-									(torch.ones([n_neurons, n_neurons]) - torch.diag(1 \
-											* torch.ones(n_neurons)))), source='Ai', target='Ae')
+									(torch.ones_like(torch.Tensor(n_neurons, n_neurons)) - torch.diag(1 \
+											* torch.ones_like(torch.Tensor(n_neurons))))), source='Ai', target='Ae')
 
 # network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
 # network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
@@ -139,7 +139,7 @@ elif mode == 'test':
 X, y = data['X'], data['y']
 
 # Count spikes from each neuron on each example (between update intervals).
-outputs = torch.zeros([update_interval, n_neurons])
+outputs = torch.zeros_like(torch.Tensor(update_interval, n_neurons))
 
 # Network simulation times.
 image_time = time
@@ -147,11 +147,11 @@ rest_time = rest
 
 # Voting schemes and neuron label assignments.
 voting_schemes = ['all']
-rates = torch.zeros(n_neurons, 10)
+rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 performances = { scheme : [] for scheme in voting_schemes }
 
 if mode == 'train':
-	assignments = -1 * torch.ones(n_neurons)
+	assignments = -1 * torch.ones_like(torch.Tensor(n_neurons))
 elif mode == 'test':
 	if gpu:
 		assignments = torch.from_numpy(load_assignments(assign_path, fname)).cuda()
