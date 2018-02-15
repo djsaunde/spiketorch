@@ -79,6 +79,6 @@ To merge your changes into the `master` branch (the definitive version of the pr
 
 Assign reviewer(s) from the group of project contributors to perform a code review of your pull request. If the reviewer(s) are happy with your changes, you may then merge it in to the `master` branch. _Code review is crucial for the development of this project_, as the whole team should be held accountable for all changes.
 
-Here's a schematic of the process for submitting a pull request to the master branch of the GitHub repository.
+Here's a schematic of the process for submitting a pull request to the master branch of the GitHub repository:
 
 ![GitHub pull request](images/contrib.png)
