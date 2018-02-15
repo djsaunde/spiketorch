@@ -315,8 +315,10 @@ for idx in range(n_samples):
 
 if mode == 'train':
 	logging.info('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (n_train, n_train, timeit.default_timer() - start))
+	print('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (n_train, n_train, timeit.default_timer() - start))
 elif mode == 'test':
 	logging.info('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (n_test, n_test, timeit.default_timer() - start))
+	print('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (n_test, n_test, timeit.default_timer() - start))
 
 results = {}
 for scheme in voting_schemes:
