@@ -1,4 +1,5 @@
 import torch
+import timeit
 
 from abc import ABC, abstractmethod
 
@@ -32,10 +33,9 @@ class InputGroup(Group):
 		super().__init__()
 
 		self.n = n  # No. of neurons.
-		self.traces = traces  # Whether to record synpatic traces.
 		self.s = torch.zeros_like(torch.Tensor(n))  # Spike occurences.
 		
-		if self.traces:
+		if traces:
 			self.x = torch.zeros_like(torch.Tensor(n))  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
@@ -44,13 +44,13 @@ class InputGroup(Group):
 		On each simulation step, set the spikes of the
 		population equal to the inputs.
 		'''
-		if self.traces:
+		if mode == 'train':
 			# Decay spike traces.
 			self.x -= dt * self.trace_tc * self.x
 
 		self.s = inpts
 
-		if self.traces:
+		if mode == 'train':
 			# Setting synaptic traces.
 			self.x[self.s] = 1.0
 
@@ -85,7 +85,7 @@ class LIFGroup(Group):
 		# Decay voltages.
 		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
-		if self.traces:
+		if mode == 'train' and self.traces:
 			# Decay spike traces.
 			self.x -= dt * self.trace_tc * self.x
 
@@ -98,9 +98,9 @@ class LIFGroup(Group):
 		self.v[self.s] = self.reset
 
 		# Integrate input and decay voltages.
-		self.v += inpts
+		self.v += sum([inpts[key] for key in inpts])
 
-		if self.traces:
+		if mode == 'train' and self.traces:
 			# Setting synaptic traces.
 			self.x[self.s] = 1.0
 
@@ -135,31 +135,65 @@ class AdaptiveLIFGroup(Group):
 		self.refrac_count = torch.zeros_like(torch.Tensor(n))  # Refractory period counters.
 
 	def step(self, inpts, mode, dt):
-		# Decay voltages.
-		self.v -= dt * self.voltage_decay * (self.v - self.rest)
+		overall_start = timeit.default_timer()
 
-		if self.traces:
+		# Decay voltages.
+		start = timeit.default_timer()
+		self.v -= dt * self.voltage_decay * (self.v - self.rest)
+		end = timeit.default_timer(); print('Voltage decay:', (end - start) * 1000)
+
+		if mode == 'train':
 			# Decay spike traces and adaptive thresholds.
-			self.x -= dt * self.trace_tc * self.x
+			if self.traces:
+				start = timeit.default_timer()
+				self.x -= dt * self.trace_tc * self.x
+				end = timeit.default_timer(); print('Trace decay', (end - start) * 1000)
+			
+			start = timeit.default_timer()
 			self.theta -= dt * self.theta_decay * self.theta
+			end = timeit.default_timer(); print('Theta decay:', (end - start) * 1000)
 
 		# Decrement refractory counters.
+		start = timeit.default_timer()
 		self.refrac_count -= dt
+		end = timeit.default_timer(); print('Refractory decay:', (end - start) * 1000)
 
 		# Check for spiking neurons.
-		self.s = (self.v >= self.threshold + self.theta) * (self.refrac_count <= 0)
+		start = timeit.default_timer()
+		self.s = (self.v >= self.threshold + self.theta) & (self.refrac_count <= 0)
+		end = timeit.default_timer(); print('Check for spikes:', (end - start) * 1000)
+		
+		start = timeit.default_timer()
 		self.refrac_count[self.s] = dt * self.refractory
+		end = timeit.default_timer(); print('Update refractory:', (end - start) * 1000)
+		
+		start = timeit.default_timer()
 		self.v[self.s] = self.reset
+		end = timeit.default_timer(); print('Reset voltages:', (end - start) * 1000)
 
 		# Choose only a single neuron to spike (ETH replication).
 		if torch.sum(self.s) > 0:
+			start = timeit.default_timer()
 			s = torch.zeros_like(torch.Tensor(self.s.size()))
+			end = timeit.default_timer(); print('Init spike vector:', (end - start) * 1000)
+			
+			start = timeit.default_timer()
 			s[torch.multinomial(self.s.float(), 1)] = 1
+			end = timeit.default_timer(); print('Pick a single spike:', (end - start) * 1000)
 
 		# Integrate inputs.
-		self.v += inpts
+		start = timeit.default_timer()
+		self.v += sum([inpts[key] for key in inpts])
+		end = timeit.default_timer(); print('Integrate inputs:', (end - start) * 1000)
 
-		if self.traces:
+		if mode == 'train' and self.traces:
 			# Update adaptive thresholds, synaptic traces.
+			start = timeit.default_timer()
 			self.theta[self.s] += self.theta_plus
+			end = timeit.default_timer(); print('Update theta:', (end - start) * 1000)
+			
+			start = timeit.default_timer()
 			self.x[self.s] = 1.0
+			end = timeit.default_timer(); print('Update traces:', (end - start) * 1000)
+
+		print(); overall_end = timeit.default_timer(); print((overall_end - overall_start) * 1000); print()

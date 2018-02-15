@@ -51,6 +51,7 @@ parser.add_argument('--n_neurons', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--update_interval', type=int, default=250)
+parser.add_argument('--print_interval', type=int, default=10)
 parser.add_argument('--nu_pre', type=float, default=1e-4)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--c_excite', type=float, default=22.5)
@@ -181,7 +182,7 @@ intensity = 1
 for idx in range(n_samples):
 	image, target = X[idx % n_images], y[idx % n_images]
 
-	if idx % 10 == 0:
+	if idx % print_interval == 0:
 		# Log progress through dataset.
 		if mode == 'train':
 			logging.info('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
@@ -241,7 +242,9 @@ for idx in range(n_samples):
 	inpts = {}
 
 	# Encode current input example as Poisson spike trains.
-	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt)))
+	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt))).byte()
+	if gpu:
+		inpts['X'] = inpts['X'].cuda()
 
 	# Run network on Poisson-encoded image data.
 	spikes = network.run(mode, inpts, image_time)

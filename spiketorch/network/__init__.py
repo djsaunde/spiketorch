@@ -34,9 +34,9 @@ class Network:
 			target = self.synapses[key].target
 
 			if not key[1] in inpts:
-				inpts[key[1]] = {}
+				inpts[key[1]] = torch.zeros_like(torch.Tensor(target.n))
 
-			inpts[key[1]][key[0]] = source.s.float() @ weights
+			inpts[key[1]] += source.s.float() @ weights
 
 		return inpts
 
