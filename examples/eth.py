@@ -51,6 +51,7 @@ parser.add_argument('--n_neurons', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--update_interval', type=int, default=250)
+parser.add_argument('--print_interval', type=int, default=10)
 parser.add_argument('--nu_pre', type=float, default=1e-4)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--c_excite', type=float, default=22.5)
@@ -122,10 +123,10 @@ elif mode == 'test':
 						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
 
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
-					w=torch.diag(c_excite * torch.ones(n_neurons))), source='Ae', target='Ai')
+					w=torch.diag(c_excite * torch.ones_like(torch.Tensor(n_neurons)))), source='Ae', target='Ai')
 network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_inhib * \
-									(torch.ones([n_neurons, n_neurons]) - torch.diag(1 \
-											* torch.ones(n_neurons)))), source='Ai', target='Ae')
+									(torch.ones_like(torch.Tensor(n_neurons, n_neurons)) - torch.diag(1 \
+											* torch.ones_like(torch.Tensor(n_neurons))))), source='Ai', target='Ae')
 
 # network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
 # network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
@@ -139,7 +140,7 @@ elif mode == 'test':
 X, y = data['X'], data['y']
 
 # Count spikes from each neuron on each example (between update intervals).
-outputs = torch.zeros([update_interval, n_neurons])
+outputs = torch.zeros_like(torch.Tensor(update_interval, n_neurons))
 
 # Network simulation times.
 image_time = time
@@ -147,11 +148,11 @@ rest_time = rest
 
 # Voting schemes and neuron label assignments.
 voting_schemes = ['all']
-rates = torch.zeros(n_neurons, 10)
+rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 performances = { scheme : [] for scheme in voting_schemes }
 
 if mode == 'train':
-	assignments = -1 * torch.ones(n_neurons)
+	assignments = -1 * torch.ones_like(torch.Tensor(n_neurons))
 elif mode == 'test':
 	if gpu:
 		assignments = torch.from_numpy(load_assignments(assign_path, fname)).cuda()
@@ -181,7 +182,7 @@ intensity = 1
 for idx in range(n_samples):
 	image, target = X[idx % n_images], y[idx % n_images]
 
-	if idx % 10 == 0:
+	if idx % print_interval == 0:
 		# Log progress through dataset.
 		if mode == 'train':
 			logging.info('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, timeit.default_timer() - start))
@@ -241,7 +242,9 @@ for idx in range(n_samples):
 	inpts = {}
 
 	# Encode current input example as Poisson spike trains.
-	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt)))
+	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt))).byte()
+	if gpu:
+		inpts['X'] = inpts['X'].cuda()
 
 	# Run network on Poisson-encoded image data.
 	spikes = network.run(mode, inpts, image_time)
@@ -312,8 +315,10 @@ for idx in range(n_samples):
 
 if mode == 'train':
 	logging.info('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (n_train, n_train, timeit.default_timer() - start))
+	print('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (n_train, n_train, timeit.default_timer() - start))
 elif mode == 'test':
 	logging.info('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (n_test, n_test, timeit.default_timer() - start))
+	print('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (n_test, n_test, timeit.default_timer() - start))
 
 results = {}
 for scheme in voting_schemes:
