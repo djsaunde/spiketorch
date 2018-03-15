@@ -128,8 +128,8 @@ network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_i
 									(torch.ones_like(torch.Tensor(n_neurons, n_neurons)) - torch.diag(1 \
 											* torch.ones_like(torch.Tensor(n_neurons))))), source='Ai', target='Ae')
 
-# network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
-# network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
+network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
+network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
 
 # Get training or test data from disk.
 if mode == 'train':
@@ -279,36 +279,32 @@ for idx in range(n_samples):
 		if gpu:
 			inpt = inpts['X'].cpu().numpy().T
 			Ae_spikes = spikes['Ae'].cpu().numpy().T; Ai_spikes = spikes['Ai'].cpu().numpy().T
-			input_exc_weights = network.synapses[('X', 'Ae')].w.cpu().numpy()
-			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
+			input_exc_weights = network.synapses[('X', 'Ae')].w
+			square_weights = get_square_weights(input_exc_weights, n_neurons_sqrt)
 			asgnmts = assignments.cpu().numpy().reshape([n_neurons_sqrt, n_neurons_sqrt]).T
-			
-			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').cpu().numpy()
-			# inh_voltages = network.monitors[('Ai', 'v')].get('v').cpu().numpy(); network.monitors[('Ai', 'v')].reset()
+			exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').cpu().numpy()
+			inh_voltages = network.monitors[('Ai', 'v')].get('v').cpu().numpy(); network.monitors[('Ai', 'v')].reset()
 		else:
 			inpt = inpts['X'].numpy().T
 			Ae_spikes = spikes['Ae'].numpy().T; Ai_spikes = spikes['Ai'].numpy().T
-			input_exc_weights = network.synapses[('X', 'Ae')].w.numpy()
-			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
+			input_exc_weights = network.synapses[('X', 'Ae')].w
+			square_weights = get_square_weights(input_exc_weights, n_neurons_sqrt)
 			asgnmts = assignments.numpy().reshape([n_neurons_sqrt, n_neurons_sqrt]).T
-			
-			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
-			# inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
+			exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
+			inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
 		
 		if idx == 0:
 			inpt_ims = plot_input(image.reshape(n_input_sqrt, n_input_sqrt), inpt)
 			spike_ims = plot_spikes(Ae_spikes, Ai_spikes)
 			weight_ims = plot_weights(square_weights, asgnmts, wmax=wmax)
 			performance_ax = plot_performance(performances)
-
-			# voltage_axes = plot_voltages(exc_voltages, inh_voltages)
+			voltage_axes = plot_voltages(exc_voltages, inh_voltages)
 		else:
 			inpt_ims = plot_input(image.reshape(n_input_sqrt, n_input_sqrt), inpt, ims=inpt_ims)
 			spike_ims = plot_spikes(Ae_spikes, Ai_spikes, ims=spike_ims)
 			weight_ims = plot_weights(square_weights, asgnmts, ims=weight_ims)
 			performance_ax = plot_performance(performances, ax=performance_ax)
-
-			# voltage_axes = plot_voltages(exc_voltages, inh_voltages, axes=voltage_axes)
+			voltage_axes = plot_voltages(exc_voltages, inh_voltages, axes=voltage_axes)
 		
 		plt.pause(1e-8)
 

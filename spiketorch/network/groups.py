@@ -155,6 +155,7 @@ class AdaptiveLIFGroup(Group):
 		if torch.sum(self.s) > 0:
 			s = torch.zeros_like(torch.Tensor(self.s.size()))
 			s[torch.multinomial(self.s.float(), 1)] = 1
+			self.s = s.byte()
 
 		# Integrate inputs.
 		self.v += inpts

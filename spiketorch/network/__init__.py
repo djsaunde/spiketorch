@@ -162,20 +162,12 @@ def load_assignments(assign_path, fname):
 	return np.load(os.path.join(assign_path, '_'.join(['assignments', fname]) + '.npy'))
 
 
-def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
-	'''
-	Get the weights from the input to excitatory layer and reshape them.
-	'''
-	square_weights = np.zeros_like(torch.Tensor([n_input_sqrt * n_neurons_sqrt,
-												n_input_sqrt * n_neurons_sqrt]))
-
-	for n in range(n_neurons_sqrt ** 2):
-		filtr = weights[:, n]
-		square_weights[(n % n_neurons_sqrt) * n_input_sqrt : \
-					((n % n_neurons_sqrt) + 1) * n_input_sqrt, \
-					((n // n_neurons_sqrt) * n_input_sqrt) : \
-					((n // n_neurons_sqrt) + 1) * n_input_sqrt] = \
-						filtr.reshape([n_input_sqrt, n_input_sqrt])
+def get_square_weights(weights, n_sqrt):
+	square_weights = torch.zeros_like(torch.Tensor(28 * n_sqrt, 28 * n_sqrt))
+	for i in range(n_sqrt):
+		for j in range(n_sqrt):
+			filter_ = weights[:, i * n_sqrt + j].contiguous().view(28, 28)
+			square_weights[i * 28 : (i + 1) * 28, (j % n_sqrt) * 28 : ((j % n_sqrt) + 1) * 28] = filter_
 	
 	return square_weights
 
